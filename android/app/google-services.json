@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "878840517533",
+    "firebase_url": "https://seads-ambulance-default-rtdb.firebaseio.com",
+    "project_id": "seads-ambulance",
+    "storage_bucket": "seads-ambulance.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:878840517533:android:6b42696576558e2cbad574",
+        "android_client_info": {
+          "package_name": "com.example.seads"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_78UOu-P99ak-mGysBHXMyCK2w-FQlMU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:878840517533:android:510551a07d635f31bad574",
+        "android_client_info": {
+          "package_name": "com.seads.ambulance"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_78UOu-P99ak-mGysBHXMyCK2w-FQlMU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
