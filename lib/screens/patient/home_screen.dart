@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,10 +7,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/location_service.dart';
 import '../../services/api_service.dart';
-import 'package:geolocator/geolocator.dart';
+import '../../services/notification_service.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -23,11 +25,54 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   bool _isDispatching = false;
   Position? _currentPosition;
   final MapController _mapController = MapController();
+  StreamSubscription? _notificationSubscription;
 
   @override
   void initState() {
     super.initState();
     _initializeLocation();
+    _listenForNotifications();
+  }
+
+  @override
+  void dispose() {
+    _notificationSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _listenForNotifications() {
+    _notificationSubscription = NotificationService()
+        .foregroundMessages
+        .listen((message) {
+      if (!mounted) return;
+      final title = message.notification?.title ?? 'SEADS';
+      final body = message.notification?.body ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: Colors.black87,
+          content: Row(
+            children: [
+              const Icon(Icons.notifications_active, color: Colors.redAccent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text(body, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   Future<void> _initializeLocation() async {

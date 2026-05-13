@@ -92,4 +92,16 @@ class ApiService {
     
     return response.data['ambulances'] ?? [];
   }
+
+  /// Saves the device's FCM push token to the backend for notifications
+  Future<void> saveFcmToken(String fcmToken) async {
+    final token = await _getToken();
+    if (token == null) return;
+
+    await dio.post(
+      '/api/users/fcm-token',
+      data: {'fcm_token': fcmToken},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+  }
 }
