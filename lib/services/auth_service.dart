@@ -114,8 +114,12 @@ class AuthService {
         ),
       );
 
-      if (response.statusCode == 200) {
-        return app_model.User.fromJson(response.data);
+      if (response.statusCode == 200 && response.data is Map) {
+        final raw = Map<String, dynamic>.from(response.data as Map);
+        final userJson = raw['user'] is Map
+            ? Map<String, dynamic>.from(raw['user'] as Map)
+            : raw;
+        return app_model.User.fromJson(userJson);
       } else {
         throw Exception('Failed to get user profile: ${response.data}');
       }

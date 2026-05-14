@@ -30,15 +30,18 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
 
   Future<void> _fetchFleet() async {
     try {
-      final ambulances = await _apiService.getAllAmbulances();
+      var ambulances = await _apiService.getFleet();
+      if (ambulances.isEmpty) {
+        ambulances = await _apiService.getAllAmbulances();
+      }
       if (mounted) {
         setState(() {
-          _ambulances = ambulances;
+          _ambulances = ambulances.isNotEmpty ? ambulances : _getMockFleet();
           _isLoading = false;
         });
       }
     } catch (e) {
-      // Mock data
+      if (!mounted) return;
       setState(() {
         _ambulances = _getMockFleet();
         _isLoading = false;

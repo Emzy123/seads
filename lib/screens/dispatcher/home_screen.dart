@@ -70,7 +70,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
         });
       }
     } catch (e) {
-      // Mock data
+      if (!mounted) return;
       setState(() {
         _incidents = _getMockIncidents();
         _ambulances = _getMockAmbulances();
@@ -236,15 +236,12 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
                           
                           // Quick Stats Row
                           _buildQuickStats(),
-                          
-                          // Map
-                          Expanded(
-                            child: _buildMap(),
-                          ),
-                          
-                          // Bottom incident feed (mobile) or stats (tablet)
-                          if (!isWideScreen) 
-                            _buildBottomPanel(),
+                          if (isWideScreen)
+                            Expanded(child: _buildMap())
+                          else ...[
+                            Expanded(flex: 2, child: _buildMap()),
+                            Expanded(flex: 1, child: _buildBottomPanel()),
+                          ],
                         ],
                       ),
                     ),
@@ -376,7 +373,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
             ..._ambulances.map((amb) {
               final latLng = _parsePostGis(amb['current_location']);
               if (latLng == null) return null;
-              final statusColor = _getAmbulanceStatusColor(amb['status']);
+              final statusColor = _getAmbulanceStatusColor(amb['status']?.toString() ?? '');
               return Marker(
                 point: latLng,
                 width: 60,
@@ -537,8 +534,8 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
   }
 
   Widget _buildIncidentTile(dynamic incident) {
-    final priority = incident['priority'] as String? ?? 'medium';
-    final status = incident['status'] as String;
+    final priority = incident['priority']?.toString() ?? 'medium';
+    final status = incident['status']?.toString() ?? 'pending';
     final priorityColor = _getPriorityColor(priority);
     final createdAt = DateTime.tryParse(incident['created_at'] ?? '') ?? DateTime.now();
     final elapsed = DateTime.now().difference(createdAt);

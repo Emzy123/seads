@@ -30,7 +30,10 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
 
   Future<void> _fetchIncidents() async {
     try {
-      final incidents = await _apiService.getAssignments();
+      var incidents = await _apiService.getIncidentLog();
+      if (incidents.isEmpty) {
+        incidents = await _apiService.getAssignments();
+      }
       if (mounted) {
         setState(() {
           _incidents = incidents;
@@ -38,7 +41,7 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
         });
       }
     } catch (e) {
-      // Mock data
+      if (!mounted) return;
       setState(() {
         _incidents = _getMockIncidents();
         _isLoading = false;

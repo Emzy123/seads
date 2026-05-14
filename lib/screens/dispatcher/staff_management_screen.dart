@@ -27,20 +27,34 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
   }
 
   Future<void> _fetchStaff() async {
-    // Mock data for demo
-    setState(() {
-      _staff = [
-        {'id': '1', 'name': 'John Smith', 'role': 'paramedic', 'status': 'on_duty', 'email': 'john.smith@seads.com', 'phone': '+1 555-0101', 'shift': 'Day', 'rating': 4.8, 'incidents': 156, 'join_date': '2022-03-15'},
-        {'id': '2', 'name': 'Sarah Johnson', 'role': 'paramedic', 'status': 'on_duty', 'email': 'sarah.j@seads.com', 'phone': '+1 555-0102', 'shift': 'Night', 'rating': 4.9, 'incidents': 203, 'join_date': '2021-06-20'},
-        {'id': '3', 'name': 'Michael Davis', 'role': 'paramedic', 'status': 'off_duty', 'email': 'm.davis@seads.com', 'phone': '+1 555-0103', 'shift': 'Day', 'rating': 4.6, 'incidents': 134, 'join_date': '2023-01-10'},
-        {'id': '4', 'name': 'Emily Wilson', 'role': 'dispatcher', 'status': 'on_duty', 'email': 'emily.w@seads.com', 'phone': '+1 555-0104', 'shift': 'Day', 'rating': 4.7, 'incidents': 0, 'join_date': '2022-08-05'},
-        {'id': '5', 'name': 'Robert Brown', 'role': 'paramedic', 'status': 'on_leave', 'email': 'r.brown@seads.com', 'phone': '+1 555-0105', 'shift': 'Night', 'rating': 4.5, 'incidents': 98, 'join_date': '2023-04-12'},
-        {'id': '6', 'name': 'Lisa Anderson', 'role': 'paramedic', 'status': 'on_duty', 'email': 'lisa.a@seads.com', 'phone': '+1 555-0106', 'shift': 'Day', 'rating': 4.8, 'incidents': 167, 'join_date': '2022-11-18'},
-        {'id': '7', 'name': 'James Taylor', 'role': 'dispatcher', 'status': 'off_duty', 'email': 'j.taylor@seads.com', 'phone': '+1 555-0107', 'shift': 'Night', 'rating': 4.6, 'incidents': 0, 'join_date': '2021-09-25'},
-        {'id': '8', 'name': 'Maria Garcia', 'role': 'paramedic', 'status': 'on_duty', 'email': 'maria.g@seads.com', 'phone': '+1 555-0108', 'shift': 'Day', 'rating': 4.9, 'incidents': 189, 'join_date': '2022-05-30'},
-      ];
-      _isLoading = false;
-    });
+    setState(() => _isLoading = true);
+    try {
+      final list = await _apiService.getStaff();
+      if (!mounted) return;
+      setState(() {
+        _staff = list.isNotEmpty ? List<dynamic>.from(list) : _mockStaff();
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _staff = _mockStaff();
+        _isLoading = false;
+      });
+    }
+  }
+
+  List<dynamic> _mockStaff() {
+    return [
+      {'id': '1', 'name': 'John Smith', 'role': 'paramedic', 'status': 'on_duty', 'email': 'john.smith@seads.com', 'phone': '+1 555-0101', 'shift': 'Day', 'rating': 4.8, 'incidents': 156, 'join_date': '2022-03-15'},
+      {'id': '2', 'name': 'Sarah Johnson', 'role': 'paramedic', 'status': 'on_duty', 'email': 'sarah.j@seads.com', 'phone': '+1 555-0102', 'shift': 'Night', 'rating': 4.9, 'incidents': 203, 'join_date': '2021-06-20'},
+      {'id': '3', 'name': 'Michael Davis', 'role': 'paramedic', 'status': 'off_duty', 'email': 'm.davis@seads.com', 'phone': '+1 555-0103', 'shift': 'Day', 'rating': 4.6, 'incidents': 134, 'join_date': '2023-01-10'},
+      {'id': '4', 'name': 'Emily Wilson', 'role': 'dispatcher', 'status': 'on_duty', 'email': 'emily.w@seads.com', 'phone': '+1 555-0104', 'shift': 'Day', 'rating': 4.7, 'incidents': 0, 'join_date': '2022-08-05'},
+      {'id': '5', 'name': 'Robert Brown', 'role': 'paramedic', 'status': 'on_leave', 'email': 'r.brown@seads.com', 'phone': '+1 555-0105', 'shift': 'Night', 'rating': 4.5, 'incidents': 98, 'join_date': '2023-04-12'},
+      {'id': '6', 'name': 'Lisa Anderson', 'role': 'paramedic', 'status': 'on_duty', 'email': 'lisa.a@seads.com', 'phone': '+1 555-0106', 'shift': 'Day', 'rating': 4.8, 'incidents': 167, 'join_date': '2022-11-18'},
+      {'id': '7', 'name': 'James Taylor', 'role': 'dispatcher', 'status': 'off_duty', 'email': 'j.taylor@seads.com', 'phone': '+1 555-0107', 'shift': 'Night', 'rating': 4.6, 'incidents': 0, 'join_date': '2021-09-25'},
+      {'id': '8', 'name': 'Maria Garcia', 'role': 'paramedic', 'status': 'on_duty', 'email': 'maria.g@seads.com', 'phone': '+1 555-0108', 'shift': 'Day', 'rating': 4.9, 'incidents': 189, 'join_date': '2022-05-30'},
+    ];
   }
 
   List<dynamic> get _filteredStaff {

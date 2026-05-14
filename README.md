@@ -58,6 +58,8 @@ seads/
             └── auth.js            # Firebase ID token verification middleware
 ```
 
+**Backend repository:** The Node server shown as `seads-backend/` above is **not included in this Flutter-only repository clone**. Use your team’s backend repo (or Git submodule) alongside this app, or point the Flutter client at the deployed API via `AppConfig.backendUrl` in [`lib/config.dart`](lib/config.dart) (default Render URL, overridable with `--dart-define=BACKEND_URL=...`). For a local server, clone the backend next to this project and run it from that directory so `cd seads-backend` matches your layout.
+
 ---
 
 ## Getting Started
@@ -76,7 +78,15 @@ flutter pub get
 flutter run
 ```
 
+To use a different backend base URL (local or staging), pass a compile-time define (see [`lib/config.dart`](lib/config.dart)):
+
+```bash
+flutter run --dart-define=BACKEND_URL=http://127.0.0.1:3000
+```
+
 ### Backend Setup
+
+Requires a checkout of the backend project (see **Backend repository** above). From that directory:
 
 ```bash
 cd seads-backend

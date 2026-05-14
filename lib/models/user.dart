@@ -25,7 +25,7 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id']?.toString() ?? '',
+      id: json['id']?.toString() ?? json['firebase_uid']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString(),
@@ -34,10 +34,18 @@ class User {
       allergies: json['allergies']?.toString(),
       conditions: json['conditions']?.toString(),
       fcmToken: json['fcm_token']?.toString(),
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
-          : null,
+      createdAt: _parseDateTime(json['created_at']),
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    try {
+      return DateTime.parse(value.toString());
+    } catch (_) {
+      return null;
+    }
   }
 
   Map<String, dynamic> toJson() {

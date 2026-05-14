@@ -37,11 +37,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
   String _ambulanceStatus = 'none'; // none, dispatched, arriving, arrived
 
   // Medical snapshot data
-  final Map<String, dynamic> _medicalSnapshot = {
-    'blood_type': 'A+',
-    'allergies': ['Penicillin', 'Latex'],
-    'conditions': ['Asthma'],
-    'medications': ['Albuterol'],
+  Map<String, dynamic> _medicalSnapshot = {
+    'blood_type': '—',
+    'allergies': <String>['Penicillin', 'Latex'],
+    'conditions': <String>['Asthma'],
+    'medications': <String>['Albuterol'],
   };
 
   @override
@@ -49,6 +49,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
     super.initState();
     _initializeLocation();
     _listenForNotifications();
+    _loadMedicalSnapshot();
   }
 
   @override
@@ -58,6 +59,30 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
     super.dispose();
   }
 
+
+  Future<void> _loadMedicalSnapshot() async {
+    try {
+      final profile = await _apiService.getMedicalProfile();
+      if (!mounted || profile.isEmpty) return;
+      setState(() {
+        if (profile.containsKey('blood_type')) {
+          final bt = profile['blood_type']?.toString().trim();
+          if (bt != null && bt.isNotEmpty) {
+            _medicalSnapshot['blood_type'] = bt;
+          }
+        }
+        if (profile.containsKey('allergies')) {
+          _medicalSnapshot['allergies'] = ApiService.coerceStringList(profile['allergies']);
+        }
+        if (profile.containsKey('conditions')) {
+          _medicalSnapshot['conditions'] = ApiService.coerceStringList(profile['conditions']);
+        }
+        if (profile.containsKey('medications')) {
+          _medicalSnapshot['medications'] = ApiService.coerceStringList(profile['medications']);
+        }
+      });
+    } catch (_) {}
+  }
 
   void _listenForNotifications() {
     _notificationSubscription = NotificationService()
@@ -248,7 +273,9 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
 
       if (mounted) {
         setState(() => _ambulanceStatus = 'dispatched');
-        _showSuccessDialog(response['message'] ?? 'Ambulance is en route!');
+        _showSuccessDialog(
+          (response['message'] ?? response['detail'] ?? 'Ambulance is en route!').toString(),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -346,14 +373,14 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _buildMedicalChip(Icons.water_drop, 'Blood Type', _medicalSnapshot['blood_type'], AppTheme.criticalRed),
-              ...(_medicalSnapshot['allergies'] as List).map((allergy) => 
+              _buildMedicalChip(Icons.water_drop, 'Blood Type', _medicalSnapshot['blood_type']?.toString() ?? '—', AppTheme.criticalRed),
+              ...(ApiService.coerceStringList(_medicalSnapshot['allergies'])).map((allergy) =>
                 _buildMedicalChip(Icons.warning_amber_rounded, 'Allergy', allergy, AppTheme.priorityHigh)
               ),
-              ...(_medicalSnapshot['conditions'] as List).map((condition) => 
+              ...(ApiService.coerceStringList(_medicalSnapshot['conditions'])).map((condition) =>
                 _buildMedicalChip(Icons.medical_services, 'Condition', condition, AppTheme.criticalTeal)
               ),
-              ...(_medicalSnapshot['medications'] as List).map((med) => 
+              ...(ApiService.coerceStringList(_medicalSnapshot['medications'])).map((med) =>
                 _buildMedicalChip(Icons.medication, 'Medication', med, AppTheme.accentOrange)
               ),
             ],

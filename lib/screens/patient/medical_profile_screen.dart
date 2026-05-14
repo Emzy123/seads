@@ -48,11 +48,11 @@ class _MedicalProfileScreenState extends ConsumerState<MedicalProfileScreen> {
   }
 
   void _populateControllers() {
-    _bloodTypeController.text = _profile?['blood_type'] ?? '';
-    _allergiesController.text = (_profile?['allergies'] as List?)?.join(', ') ?? '';
-    _medicationsController.text = (_profile?['medications'] as List?)?.join(', ') ?? '';
-    _conditionsController.text = (_profile?['conditions'] as List?)?.join(', ') ?? '';
-    _notesController.text = _profile?['additional_notes'] ?? '';
+    _bloodTypeController.text = _profile?['blood_type']?.toString() ?? '';
+    _allergiesController.text = ApiService.coerceStringList(_profile?['allergies']).join(', ');
+    _medicationsController.text = ApiService.coerceStringList(_profile?['medications']).join(', ');
+    _conditionsController.text = ApiService.coerceStringList(_profile?['conditions']).join(', ');
+    _notesController.text = _profile?['additional_notes']?.toString() ?? '';
   }
 
   @override
