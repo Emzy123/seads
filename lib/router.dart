@@ -7,8 +7,19 @@ import 'screens/auth/signup_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/onboarding_complete_screen.dart';
 import 'screens/patient/home_screen.dart';
+import 'screens/patient/emergency_history_screen.dart';
+import 'screens/patient/emergency_contacts_screen.dart';
+import 'screens/patient/medical_profile_screen.dart';
 import 'screens/paramedic/home_screen.dart';
+import 'screens/paramedic/assignment_history_screen.dart';
+import 'screens/paramedic/performance_stats_screen.dart';
+import 'screens/paramedic/equipment_check_screen.dart';
+import 'screens/paramedic/shift_schedule_screen.dart';
 import 'screens/dispatcher/home_screen.dart';
+import 'screens/dispatcher/fleet_management_screen.dart';
+import 'screens/dispatcher/reports_analytics_screen.dart';
+import 'screens/dispatcher/staff_management_screen.dart';
+import 'screens/dispatcher/incident_log_screen.dart';
 import 'services/auth_service.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -60,11 +71,70 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     
-    // Protected routes
+    // Protected routes - Patient
     GoRoute(
       path: '/home',
       builder: (context, state) => const HomeScreen(),
     ),
+    GoRoute(
+      path: '/history',
+      builder: (context, state) => const EmergencyHistoryScreen(),
+    ),
+    GoRoute(
+      path: '/contacts',
+      builder: (context, state) => const EmergencyContactsScreen(),
+    ),
+    GoRoute(
+      path: '/medical-profile',
+      builder: (context, state) => const MedicalProfileScreen(),
+    ),
+
+    // Protected routes - Paramedic
+    GoRoute(
+      path: '/assignment-history',
+      builder: (context, state) => const AssignmentHistoryScreen(),
+    ),
+    GoRoute(
+      path: '/stats',
+      builder: (context, state) => const PerformanceStatsScreen(),
+    ),
+    GoRoute(
+      path: '/equipment',
+      builder: (context, state) => const EquipmentCheckScreen(),
+    ),
+    GoRoute(
+      path: '/schedule',
+      builder: (context, state) => const ShiftScheduleScreen(),
+    ),
+
+    // Protected routes - Dispatcher
+    GoRoute(
+      path: '/fleet',
+      builder: (context, state) => const FleetManagementScreen(),
+    ),
+    GoRoute(
+      path: '/reports',
+      builder: (context, state) => const ReportsAnalyticsScreen(),
+    ),
+    GoRoute(
+      path: '/staff',
+      builder: (context, state) => const StaffManagementScreen(),
+    ),
+    GoRoute(
+      path: '/incident-log',
+      builder: (context, state) => const IncidentLogScreen(),
+    ),
+
+    // Shared routes
+    GoRoute(
+      path: '/settings',
+      builder: (context, state) => const Scaffold(body: Center(child: Text('Settings - Coming Soon'))),
+    ),
+    GoRoute(
+      path: '/help',
+      builder: (context, state) => const Scaffold(body: Center(child: Text('Help & Support - Coming Soon'))),
+    ),
+
     GoRoute(
       path: '/',
       redirect: (context, state) => '/welcome',

@@ -104,4 +104,133 @@ class ApiService {
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
   }
+
+  // ==================== PATIENT API METHODS ====================
+
+  /// Fetches emergency history for the current patient
+  Future<List<dynamic>> getEmergencyHistory() async {
+    final token = await _getToken();
+    if (token == null) return [];
+
+    final response = await dio.get(
+      '/api/patients/history',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data['history'] ?? [];
+  }
+
+  /// Fetches emergency contacts for the current patient
+  Future<List<dynamic>> getEmergencyContacts() async {
+    final token = await _getToken();
+    if (token == null) return [];
+
+    final response = await dio.get(
+      '/api/patients/contacts',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data['contacts'] ?? [];
+  }
+
+  /// Fetches medical profile for the current patient
+  Future<Map<String, dynamic>> getMedicalProfile() async {
+    final token = await _getToken();
+    if (token == null) return {};
+
+    final response = await dio.get(
+      '/api/patients/medical-profile',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data ?? {};
+  }
+
+  /// Updates medical profile for the current patient
+  Future<void> updateMedicalProfile(Map<String, dynamic> data) async {
+    final token = await _getToken();
+    if (token == null) return;
+
+    await dio.put(
+      '/api/patients/medical-profile',
+      data: data,
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+  }
+
+  // ==================== PARAMEDIC API METHODS ====================
+
+  /// Fetches assignment history for the current paramedic
+  Future<List<dynamic>> getAssignmentHistory() async {
+    final token = await _getToken();
+    if (token == null) return [];
+
+    final response = await dio.get(
+      '/api/paramedics/history',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data['assignments'] ?? [];
+  }
+
+  /// Fetches performance stats for the current paramedic
+  Future<Map<String, dynamic>> getPerformanceStats({String period = 'week'}) async {
+    final token = await _getToken();
+    if (token == null) return {};
+
+    final response = await dio.get(
+      '/api/paramedics/stats',
+      queryParameters: {'period': period},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data ?? {};
+  }
+
+  // ==================== DISPATCHER API METHODS ====================
+
+  /// Fetches fleet information for dispatchers
+  Future<List<dynamic>> getFleet() async {
+    final token = await _getToken();
+    if (token == null) return [];
+
+    final response = await dio.get(
+      '/api/dispatchers/fleet',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data['fleet'] ?? [];
+  }
+
+  /// Fetches staff list for dispatchers
+  Future<List<dynamic>> getStaff() async {
+    final token = await _getToken();
+    if (token == null) return [];
+
+    final response = await dio.get(
+      '/api/dispatchers/staff',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data['staff'] ?? [];
+  }
+
+  /// Fetches incident log for dispatchers
+  Future<List<dynamic>> getIncidentLog({Map<String, dynamic>? filters}) async {
+    final token = await _getToken();
+    if (token == null) return [];
+
+    final response = await dio.get(
+      '/api/dispatchers/incidents',
+      queryParameters: filters,
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data['incidents'] ?? [];
+  }
+
+  /// Fetches analytics reports for dispatchers
+  Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) async {
+    final token = await _getToken();
+    if (token == null) return {};
+
+    final response = await dio.get(
+      '/api/dispatchers/analytics',
+      queryParameters: {'period': period},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data ?? {};
+  }
 }
