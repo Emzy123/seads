@@ -40,37 +40,47 @@ class AppNavBar extends StatelessWidget {
                   final item = items[index];
                   final isActive = index == currentIndex;
                   
-                  return GestureDetector(
-                    onTap: () {
-                      if (!isActive) {
-                        context.push(item.route);
-                      }
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isActive ? active.withOpacity(0.2) : Colors.transparent,
+                  return Semantics(
+                    button: true,
+                    selected: isActive,
+                    label: item.label,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          if (!isActive) {
+                            context.push(item.route);
+                          }
+                        },
                         borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            item.icon,
-                            color: isActive ? active : Colors.white54,
-                            size: 24,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          constraints: const BoxConstraints(minWidth: 72, minHeight: 48),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isActive ? active.withOpacity(0.2) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            item.label,
-                            style: TextStyle(
-                              color: isActive ? active : Colors.white54,
-                              fontSize: 11,
-                              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                            ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                item.icon,
+                                color: isActive ? active : Colors.white54,
+                                size: 24,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item.label,
+                                style: TextStyle(
+                                  color: isActive ? active : Colors.white54,
+                                  fontSize: 12,
+                                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   );

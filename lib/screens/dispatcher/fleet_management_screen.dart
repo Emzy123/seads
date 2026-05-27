@@ -4,8 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import '../../config.dart';
+import '../../core/demo_data.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../services/api_service.dart';
+import '../../widgets/seads_states.dart';
 
 class FleetManagementScreen extends ConsumerStatefulWidget {
   const FleetManagementScreen({super.key});
@@ -18,6 +22,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
   final ApiService _apiService = ApiService();
   List<dynamic> _ambulances = [];
   bool _isLoading = true;
+  String? _error;
   String _filterStatus = 'all';
   dynamic _selectedAmbulance;
   final MapController _mapController = MapController();
@@ -29,6 +34,10 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
   }
 
   Future<void> _fetchFleet() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       var ambulances = await _apiService.getFleet();
       if (ambulances.isEmpty) {
@@ -36,28 +45,25 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
       }
       if (mounted) {
         setState(() {
-          _ambulances = ambulances.isNotEmpty ? ambulances : _getMockFleet();
+          _ambulances = DemoData.orEmpty(ambulances, DemoData.mockFleet);
           _isLoading = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _ambulances = _getMockFleet();
-        _isLoading = false;
-      });
+      if (AppConfig.isDemoMode) {
+        setState(() {
+          _ambulances = DemoData.mockFleet();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _ambulances = [];
+          _error = ApiService.wrapError(e).userMessage;
+          _isLoading = false;
+        });
+      }
     }
-  }
-
-  List<dynamic> _getMockFleet() {
-    return [
-      {'id': 'AMB-201', 'status': 'available', 'type': 'Type II', 'current_location': 'POINT(7.49508 9.05785)', 'driver': 'Paramedic Smith', 'mileage': 45200, 'fuel_level': 85, 'last_service': '2024-01-15'},
-      {'id': 'AMB-202', 'status': 'on_mission', 'type': 'Type III', 'current_location': 'POINT(7.50234 9.06345)', 'driver': 'Paramedic Johnson', 'mileage': 38900, 'fuel_level': 62, 'last_service': '2024-02-01'},
-      {'id': 'AMB-203', 'status': 'maintenance', 'type': 'Type II', 'current_location': null, 'driver': 'Unassigned', 'mileage': 67800, 'fuel_level': 30, 'last_service': '2023-12-10'},
-      {'id': 'AMB-204', 'status': 'available', 'type': 'Type III', 'current_location': 'POINT(7.48921 9.05234)', 'driver': 'Paramedic Davis', 'mileage': 23400, 'fuel_level': 92, 'last_service': '2024-02-20'},
-      {'id': 'AMB-205', 'status': 'on_mission', 'type': 'Type II', 'current_location': 'POINT(7.51123 9.07123)', 'driver': 'Paramedic Wilson', 'mileage': 52300, 'fuel_level': 45, 'last_service': '2024-01-28'},
-      {'id': 'AMB-206', 'status': 'offline', 'type': 'Type III', 'current_location': null, 'driver': 'Unassigned', 'mileage': 89100, 'fuel_level': 15, 'last_service': '2023-11-15'},
-    ];
   }
 
   List<dynamic> get _filteredAmbulances {
@@ -98,8 +104,16 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: SpinKitPulse(color: Colors.orangeAccent, size: 60))
-          : _buildContent(),
+          ? const SeadsLoadingState(label: 'Loading fleet…')
+          : _error != null
+              ? SeadsErrorState(message: _error, onRetry: _fetchFleet)
+              : _ambulances.isEmpty
+                  ? const SeadsEmptyState(
+                      icon: Icons.local_shipping_outlined,
+                      title: 'No ambulances',
+                      message: 'Fleet data will appear when units are registered.',
+                    )
+                  : _buildContent(),
     );
   }
 
@@ -588,16 +602,33 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
                 ...['available', 'on_mission', 'maintenance', 'offline'].map((status) => ListTile(
                   leading: Icon(_getStatusIcon(status), color: _getStatusColor(status)),
                   title: Text(status.toUpperCase().replaceAll('_', ' '), style: const TextStyle(color: Colors.white)),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    setState(() {
-                      ambulance['status'] = status;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Status updated to ${status.replaceAll('_', ' ')}')),
-                    );
+                    final id = ambulance['id']?.toString();
+                    if (id == null) return;
+                    try {
+                      await _apiService.updateAmbulanceStatus(
+                        ambulanceId: id,
+                        status: status,
+                      );
+                      if (mounted) {
+                        setState(() => ambulance['status'] = status);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Status updated to ${status.replaceAll('_', ' ')}')),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(ApiService.wrapError(e).userMessage),
+                            backgroundColor: AppTheme.criticalRed,
+                          ),
+                        );
+                      }
+                    }
                   },
-                )).toList(),
+                )),
               ],
             ),
           ),

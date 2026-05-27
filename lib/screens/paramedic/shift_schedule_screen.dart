@@ -4,7 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
+import '../../config.dart';
+import '../../core/api_exception.dart';
+import '../../core/demo_data.dart';
+import '../../core/shift_models.dart';
+import '../../services/api_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/seads_states.dart';
 
 class ShiftScheduleScreen extends ConsumerStatefulWidget {
   const ShiftScheduleScreen({super.key});
@@ -14,21 +20,57 @@ class ShiftScheduleScreen extends ConsumerStatefulWidget {
 }
 
 class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
+  final ApiService _apiService = ApiService();
   CalendarFormat _calendarFormat = CalendarFormat.week;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+  bool _isLoading = true;
+  String? _error;
 
-  // Mock shift data
   final Map<DateTime, List<Shift>> _shifts = {};
   final List<ShiftSwapRequest> _swapRequests = [];
 
   @override
   void initState() {
     super.initState();
-    _generateMockShifts();
+    _fetchShifts();
+  }
+
+  Future<void> _fetchShifts() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final from = DateTime.now().subtract(const Duration(days: 7));
+      final to = DateTime.now().add(const Duration(days: 30));
+      final raw = await _apiService.getShifts(from: from, to: to);
+      if (!mounted) return;
+      _shifts.clear();
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final record = ShiftRecord.fromJson(Map<String, dynamic>.from(item));
+        final shift = Shift.fromRecord(record);
+        final key = DateTime(shift.start.year, shift.start.month, shift.start.day);
+        _shifts.putIfAbsent(key, () => []).add(shift);
+      }
+      setState(() => _isLoading = false);
+    } catch (e) {
+      if (!mounted) return;
+      if (AppConfig.isDemoMode) {
+        _generateMockShifts();
+        setState(() => _isLoading = false);
+      } else {
+        setState(() {
+          _error = ApiService.wrapError(e).userMessage;
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _generateMockShifts() {
+    _shifts.clear();
     final now = DateTime.now();
     for (int i = -7; i < 30; i++) {
       final date = now.add(Duration(days: i));
@@ -38,6 +80,7 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
       if (i % 3 == 0) {
         _shifts[dateKey] = [
           Shift(
+            id: 'demo-day-$i',
             type: 'Day Shift',
             start: DateTime(date.year, date.month, date.day, 8, 0),
             end: DateTime(date.year, date.month, date.day, 20, 0),
@@ -49,6 +92,7 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
       } else if (i % 3 == 1) {
         _shifts[dateKey] = [
           Shift(
+            id: 'demo-night-$i',
             type: 'Night Shift',
             start: DateTime(date.year, date.month, date.day, 20, 0),
             end: DateTime(date.year, date.month, date.day + 1, 8, 0),
@@ -99,7 +143,11 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
           ),
         ],
       ),
-      body: _buildContent(),
+      body: _isLoading
+          ? const SeadsLoadingState(label: 'Loading schedule…')
+          : _error != null
+              ? SeadsErrorState(message: _error, onRetry: _fetchShifts)
+              : _buildContent(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _requestTimeOff(),
         backgroundColor: Colors.orangeAccent,
@@ -170,7 +218,14 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
     final currentShifts = _getShiftsForDay(DateTime.now());
     final activeShift = currentShifts.firstWhere(
       (s) => s.status == 'active',
-      orElse: () => Shift(type: '', start: DateTime.now(), end: DateTime.now(), status: 'none', partner: '', ambulanceId: ''),
+      orElse: () => Shift(
+        type: '',
+        start: DateTime.now(),
+        end: DateTime.now(),
+        status: 'none',
+        partner: '',
+        ambulanceId: '',
+      ),
     );
 
     if (activeShift.status == 'none') {
@@ -669,10 +724,30 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
     );
   }
 
-  void _requestSwap(Shift shift) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Swap request feature coming soon')),
-    );
+  Future<void> _requestSwap(Shift shift) async {
+    if (shift.id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot request swap without shift ID')),
+      );
+      return;
+    }
+    try {
+      await _apiService.requestShiftSwap(shiftId: shift.id, message: 'Swap requested from app');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Swap request submitted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ApiService.wrapError(e).userMessage),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   void _requestTimeOff() {
@@ -765,6 +840,7 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
 }
 
 class Shift {
+  final String id;
   final String type;
   final DateTime start;
   final DateTime end;
@@ -773,6 +849,7 @@ class Shift {
   final String ambulanceId;
 
   Shift({
+    this.id = '',
     required this.type,
     required this.start,
     required this.end,
@@ -780,6 +857,16 @@ class Shift {
     required this.partner,
     required this.ambulanceId,
   });
+
+  factory Shift.fromRecord(ShiftRecord record) => Shift(
+        id: record.id,
+        type: record.type,
+        start: record.start,
+        end: record.end,
+        status: record.status,
+        partner: record.partner,
+        ambulanceId: record.ambulanceId,
+      );
 }
 
 class ShiftSwapRequest {

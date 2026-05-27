@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Backend — Node.js
+seads-backend/node_modules/
+seads-backend/.env

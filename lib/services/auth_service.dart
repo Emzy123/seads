@@ -18,9 +18,10 @@ class AuthService {
     required String role,
     required String phone,
   }) async {
+    UserCredential? credential;
     try {
       // 1. Create Firebase account
-      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
+      credential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
@@ -40,12 +41,22 @@ class AuthService {
         throw Exception('Failed to register: ${response.data}');
       }
     } on DioException catch (e) {
+      if (credential != null && credential.user != null) {
+        try {
+          await credential.user!.delete();
+        } catch (_) {}
+      }
       if (e.response != null && e.response?.data != null) {
         final errorMsg = e.response?.data['error'] ?? e.response?.data.toString() ?? e.message;
         throw Exception('Server error: $errorMsg');
       }
       throw Exception('Network error: ${e.message}');
     } catch (e) {
+      if (credential != null && credential.user != null) {
+        try {
+          await credential.user!.delete();
+        } catch (_) {}
+      }
       throw Exception('Error creating account: $e');
     }
   }

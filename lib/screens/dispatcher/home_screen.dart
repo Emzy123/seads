@@ -10,10 +10,15 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
-import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../config.dart';
+import '../../core/breakpoints.dart';
+import '../../core/demo_data.dart';
 import '../../theme/app_theme.dart';
+import '../../core/offline_queue.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/sync_status_banner.dart';
+import '../../services/realtime_sync_service.dart';
 
 class DispatcherHomeScreen extends ConsumerStatefulWidget {
   const DispatcherHomeScreen({super.key});
@@ -25,37 +30,83 @@ class DispatcherHomeScreen extends ConsumerStatefulWidget {
 class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
   final ApiService _apiService = ApiService();
   final MapController _mapController = MapController();
-  Timer? _pollingTimer;
+  final RealtimeSyncService _realtime = RealtimeSyncService();
+  int _pendingSyncCount = 0;
 
   List<dynamic> _incidents = [];
   List<dynamic> _ambulances = [];
   bool _isInitialLoading = true;
   String _selectedFilter = 'all';
+  String _avgResponseDisplay = '—';
+  int _onSceneCount = 0;
   
-  // Communication panel
+  // Communication panel (demo sample messages only in DEMO_MODE)
   bool _showChatPanel = false;
-  final List<Map<String, dynamic>> _chatMessages = [
-    {'sender': 'System', 'message': 'Ambulance AMB-201 dispatched to incident INC-2024-003', 'time': '2 min ago', 'type': 'system'},
-    {'sender': 'Paramedic Johnson', 'message': 'Arrived on scene, patient stable', 'time': '5 min ago', 'type': 'paramedic'},
-    {'sender': 'Dispatcher', 'message': 'All units, heavy traffic reported on Main St', 'time': '10 min ago', 'type': 'dispatcher'},
-  ];
+  late final List<Map<String, dynamic>> _chatMessages = AppConfig.isDemoMode
+      ? [
+          {
+            'sender': 'System',
+            'message': 'Ambulance AMB-201 dispatched to incident INC-2024-003',
+            'time': '2 min ago',
+            'type': 'system',
+          },
+          {
+            'sender': 'Paramedic Johnson',
+            'message': 'Arrived on scene, patient stable',
+            'time': '5 min ago',
+            'type': 'paramedic',
+          },
+          {
+            'sender': 'Dispatcher',
+            'message': 'All units, heavy traffic reported on Main St',
+            'time': '10 min ago',
+            'type': 'dispatcher',
+          },
+        ]
+      : [];
   final TextEditingController _chatController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _refreshPendingCount();
     _fetchData();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchData());
+    _loadDashboardMetrics();
+    _realtime.start(_fetchData);
+  }
+
+  Future<void> _refreshPendingCount() async {
+    final count = OfflineQueue.pendingCount;
+    if (mounted && count != _pendingSyncCount) {
+      setState(() => _pendingSyncCount = count);
+    }
+  }
+
+  Future<void> _loadDashboardMetrics() async {
+    try {
+      final analytics = await _apiService.getAnalytics(period: 'day');
+      final overview = analytics['overview'];
+      if (overview is Map) {
+        final avg = overview['avg_response_time'] ?? overview['avgResponseTime'];
+        if (avg != null) {
+          _avgResponseDisplay = avg.toString().contains('min') ? avg.toString() : '$avg min';
+        }
+      }
+    } catch (_) {
+      // Stats row falls back to computed values from incidents.
+    }
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _pollingTimer?.cancel();
+    _realtime.dispose();
     _chatController.dispose();
     super.dispose();
   }
 
   Future<void> _fetchData() async {
+    await _refreshPendingCount();
     try {
       final futures = await Future.wait([
         _apiService.getAssignments(),
@@ -63,39 +114,48 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
       ]);
 
       if (mounted) {
+        final incidents = DemoData.orEmpty(
+          List<dynamic>.from(futures[0]),
+          DemoData.mockIncidents,
+        );
         setState(() {
-          _incidents = futures[0];
-          _ambulances = futures[1];
+          _incidents = incidents;
+          _ambulances = DemoData.orEmpty(
+            List<dynamic>.from(futures[1]),
+            DemoData.mockAmbulances,
+          );
+          _onSceneCount = incidents
+              .where((i) {
+                final s = i['status']?.toString() ?? '';
+                return s == 'on_scene' || s == 'transporting';
+              })
+              .length;
           _isInitialLoading = false;
         });
       }
+      _realtime.reportSuccess();
     } catch (e) {
+      _realtime.reportFailure();
       if (!mounted) return;
       setState(() {
-        _incidents = _getMockIncidents();
-        _ambulances = _getMockAmbulances();
+        if (AppConfig.isDemoMode) {
+          _incidents = DemoData.mockIncidents();
+          _ambulances = DemoData.mockAmbulances();
+        } else {
+          _incidents = [];
+          _ambulances = [];
+        }
         _isInitialLoading = false;
       });
+      if (!AppConfig.isDemoMode) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ApiService.wrapError(e).userMessage),
+            backgroundColor: AppTheme.criticalRed,
+          ),
+        );
+      }
     }
-  }
-
-  List<dynamic> _getMockIncidents() {
-    return [
-      {'id': 'INC-2024-001', 'emergency_type': 'Cardiac Arrest', 'status': 'pending', 'priority': 'critical', 'patient': {'name': 'John Doe'}, 'patient_location': 'POINT(-74.006 40.7128)', 'created_at': DateTime.now().subtract(const Duration(minutes: 2)).toIso8601String()},
-      {'id': 'INC-2024-002', 'emergency_type': 'Vehicle Accident', 'status': 'en_route', 'priority': 'high', 'patient': {'name': 'Jane Smith'}, 'patient_location': 'POINT(-73.985 40.7589)', 'ambulance_id': 'AMB-201', 'created_at': DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String()},
-      {'id': 'INC-2024-003', 'emergency_type': 'Respiratory Distress', 'status': 'on_scene', 'priority': 'high', 'patient': {'name': 'Bob Wilson'}, 'patient_location': 'POINT(-73.968 40.7489)', 'ambulance_id': 'AMB-202', 'created_at': DateTime.now().subtract(const Duration(minutes: 8)).toIso8601String()},
-      {'id': 'INC-2024-004', 'emergency_type': 'Fall Injury', 'status': 'transporting', 'priority': 'medium', 'patient': {'name': 'Alice Brown'}, 'patient_location': 'POINT(-73.956 40.7389)', 'ambulance_id': 'AMB-203', 'created_at': DateTime.now().subtract(const Duration(minutes: 15)).toIso8601String()},
-    ];
-  }
-
-  List<dynamic> _getMockAmbulances() {
-    return [
-      {'id': 'AMB-201', 'status': 'responding', 'current_location': 'POINT(-73.99 40.72)', 'paramedic': 'John Smith'},
-      {'id': 'AMB-202', 'status': 'on_scene', 'current_location': 'POINT(-73.968 40.7489)', 'paramedic': 'Sarah Johnson'},
-      {'id': 'AMB-203', 'status': 'transporting', 'current_location': 'POINT(-73.956 40.7389)', 'paramedic': 'Mike Davis'},
-      {'id': 'AMB-204', 'status': 'available', 'current_location': 'POINT(-74.01 40.70)', 'paramedic': 'Emily Wilson'},
-      {'id': 'AMB-205', 'status': 'available', 'current_location': 'POINT(-73.98 40.73)', 'paramedic': 'Robert Brown'},
-    ];
   }
 
   LatLng? _parsePostGis(String? pointString) {
@@ -125,7 +185,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
       .where((a) => a['status'] == 'available')
       .length;
 
-  void _assignNearestAmbulance(dynamic incident) {
+  Future<void> _assignNearestAmbulance(dynamic incident) async {
     AppTheme.hapticMedium();
     final available = _ambulances.where((a) => a['status'] == 'available').toList();
     if (available.isEmpty) {
@@ -134,21 +194,46 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
       );
       return;
     }
-    
-    // Mock assignment
-    setState(() {
-      incident['status'] = 'en_route';
-      incident['ambulance_id'] = available.first['id'];
-      available.first['status'] = 'responding';
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Assigned ${available.first['id']} to ${incident['id']}'),
-        backgroundColor: Colors.greenAccent,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+
+    final ambulance = available.first;
+    final incidentId = incident['id']?.toString();
+    final ambulanceId = ambulance['id']?.toString();
+    if (incidentId == null || ambulanceId == null) return;
+
+    try {
+      await _apiService.assignAmbulance(
+        incidentId: incidentId,
+        ambulanceId: ambulanceId,
+      );
+      await _fetchData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Assigned $ambulanceId to $incidentId'),
+            backgroundColor: Colors.greenAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (AppConfig.isDemoMode && mounted) {
+        setState(() {
+          incident['status'] = 'en_route';
+          incident['ambulance_id'] = ambulanceId;
+          ambulance['status'] = 'responding';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Demo assign: $ambulanceId → $incidentId')),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ApiService.wrapError(e).userMessage),
+            backgroundColor: AppTheme.criticalRed,
+          ),
+        );
+      }
+    }
   }
 
   void _sendBroadcastMessage() {
@@ -216,9 +301,19 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
         ],
       ),
       body: AnimatedBackground(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWideScreen = constraints.maxWidth > 900;
+        child: Column(
+          children: [
+            SyncStatusBanner(
+              pendingCount: _pendingSyncCount,
+              pollInterval: _realtime.currentInterval,
+              showBackoff: _realtime.currentInterval.inSeconds > 2,
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+            final bp = SeadsBreakpoints.ofWidth(constraints.maxWidth);
+            final isWideScreen = bp == SeadsBreakpoint.expanded;
+            final isMedium = bp == SeadsBreakpoint.medium;
             
             return Stack(
               children: [
@@ -236,7 +331,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
                           
                           // Quick Stats Row
                           _buildQuickStats(),
-                          if (isWideScreen)
+                          if (isWideScreen || isMedium)
                             Expanded(child: _buildMap())
                           else ...[
                             Expanded(flex: 2, child: _buildMap()),
@@ -246,8 +341,8 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
                       ),
                     ),
                     
-                    // Right: Incident Feed + Chat (wide screens)
-                    if (isWideScreen)
+                    // Right: incident list on tablet/desktop
+                    if (isWideScreen || isMedium)
                       Expanded(
                         flex: 1,
                         child: Column(
@@ -265,6 +360,9 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
               ],
             );
           },
+        ),
+            ),
+          ],
         ),
       ),
     );
@@ -328,9 +426,9 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
           const SizedBox(width: 12),
           Expanded(child: _buildStatCard('Available', _availableAmbulances.toString(), Icons.local_shipping, Colors.greenAccent)),
           const SizedBox(width: 12),
-          Expanded(child: _buildStatCard('Avg Response', '5.2m', Icons.timer, AppTheme.criticalTeal)),
+          Expanded(child: _buildStatCard('Avg Response', _avgResponseDisplay, Icons.timer, AppTheme.criticalTeal)),
           const SizedBox(width: 12),
-          Expanded(child: _buildStatCard('On Scene', '3', Icons.check_circle, AppTheme.accentOrange)),
+          Expanded(child: _buildStatCard('On Scene', '$_onSceneCount', Icons.check_circle, AppTheme.accentOrange)),
         ],
       ),
     );
@@ -374,18 +472,23 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
               final latLng = _parsePostGis(amb['current_location']);
               if (latLng == null) return null;
               final statusColor = _getAmbulanceStatusColor(amb['status']?.toString() ?? '');
+              final id = amb['id']?.toString() ?? 'ambulance';
+              final status = amb['status']?.toString() ?? 'unknown';
               return Marker(
                 point: latLng,
                 width: 60,
                 height: 60,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.3),
-                    shape: BoxShape.circle,
+                child: Semantics(
+                  label: 'Ambulance $id, status $status',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.local_shipping, color: statusColor, size: 24)
+                        .animate(onPlay: (c) => amb['status'] == 'responding' ? c.repeat(reverse: true) : null)
+                        .scale(begin: const Offset(0.9, 0.9), end: const Offset(1.1, 1.1), duration: 1.seconds),
                   ),
-                  child: Icon(Icons.local_shipping, color: statusColor, size: 24)
-                      .animate(onPlay: (c) => amb['status'] == 'responding' ? c.repeat(reverse: true) : null)
-                      .scale(begin: const Offset(0.9, 0.9), end: const Offset(1.1, 1.1), duration: 1.seconds),
                 ),
               );
             }).whereType<Marker>(),
@@ -395,19 +498,25 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
               final latLng = _parsePostGis(inc['patient_location']);
               if (latLng == null) return null;
               final priorityColor = _getPriorityColor(inc['priority'] ?? 'medium');
+              final incId = inc['id']?.toString() ?? 'incident';
+              final priority = inc['priority']?.toString() ?? 'medium';
+              final type = inc['emergency_type']?.toString() ?? 'emergency';
               return Marker(
                 point: latLng,
                 width: 80,
                 height: 80,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: priorityColor.withOpacity(0.3),
-                    shape: BoxShape.circle,
+                child: Semantics(
+                  label: 'Incident $incId, $type, $priority priority',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: priorityColor.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.warning, color: priorityColor, size: 30)
+                        .animate(onPlay: (c) => c.repeat())
+                        .scale(begin: const Offset(1, 1), end: const Offset(1.3, 1.3), duration: 1.seconds)
+                        .fade(end: 0.2),
                   ),
-                  child: Icon(Icons.warning, color: priorityColor, size: 30)
-                      .animate(onPlay: (c) => c.repeat())
-                      .scale(begin: const Offset(1, 1), end: const Offset(1.3, 1.3), duration: 1.seconds)
-                      .fade(end: 0.2),
                 ),
               );
             }).whereType<Marker>(),

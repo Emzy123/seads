@@ -20,6 +20,8 @@ import 'screens/dispatcher/fleet_management_screen.dart';
 import 'screens/dispatcher/reports_analytics_screen.dart';
 import 'screens/dispatcher/staff_management_screen.dart';
 import 'screens/dispatcher/incident_log_screen.dart';
+import 'screens/shared/settings_screen.dart';
+import 'screens/shared/help_screen.dart';
 import 'services/auth_service.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -128,11 +130,11 @@ final GoRouter appRouter = GoRouter(
     // Shared routes
     GoRoute(
       path: '/settings',
-      builder: (context, state) => const Scaffold(body: Center(child: Text('Settings - Coming Soon'))),
+      builder: (context, state) => const SettingsScreen(),
     ),
     GoRoute(
       path: '/help',
-      builder: (context, state) => const Scaffold(body: Center(child: Text('Help & Support - Coming Soon'))),
+      builder: (context, state) => const HelpScreen(),
     ),
 
     GoRoute(

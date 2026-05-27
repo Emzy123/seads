@@ -10,11 +10,13 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../providers/auth_provider.dart';
+import '../../core/offline_queue.dart';
 import '../../services/location_service.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/seads_buttons.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -145,7 +147,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
 
   void _startHold() {
     if (_isDispatching) return;
-    
+    if (!AppTheme.animationsEnabled(context)) {
+      _requestSosViaTap();
+      return;
+    }
+
     AppTheme.hapticMedium();
     setState(() {
       _isHolding = true;
@@ -178,6 +184,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
       _showConfirmation = true;
     });
     AppTheme.hapticSuccess();
+    _showSOSConfirmation();
+  }
+
+  void _requestSosViaTap() {
+    if (_isDispatching) return;
+    AppTheme.hapticMedium();
     _showSOSConfirmation();
   }
 
@@ -258,16 +270,18 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
 
   Future<void> _requestAmbulance() async {
     setState(() => _isDispatching = true);
+    Position? position;
+    String? patientId;
     try {
-      final position = _currentPosition ?? await LocationService.getCurrentPosition();
-
+      position = _currentPosition ?? await LocationService.getCurrentPosition();
       final user = ref.read(authServiceProvider).currentUser;
       if (user == null) throw Exception('Not logged in');
+      patientId = user.uid;
 
       final response = await _apiService.dispatchAmbulance(
         lat: position.latitude,
         lng: position.longitude,
-        patientId: user.uid,
+        patientId: patientId,
         emergencyType: 'Medical Emergency',
       );
 
@@ -278,10 +292,41 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (position != null && patientId != null) {
+        try {
+          await OfflineQueue.enqueue(
+            type: 'dispatch',
+            payload: {
+              'lat': position.latitude,
+              'lng': position.longitude,
+              'patient_id': patientId,
+              'emergency_type': 'Medical Emergency',
+            },
+          );
+        if (mounted) {
+          setState(() => _ambulanceStatus = 'dispatched');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Request queued — will dispatch when connection returns'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(ApiService.wrapError(e).userMessage),
+                backgroundColor: AppTheme.criticalRed,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed: ${e.toString()}'),
+            content: Text(ApiService.wrapError(e).userMessage),
             backgroundColor: AppTheme.criticalRed,
             behavior: SnackBarBehavior.floating,
           ),
@@ -454,70 +499,14 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
   }
 
   Widget _buildSOSButton() {
-    return GestureDetector(
-      onTapDown: (_) => _startHold(),
-      onTapUp: (_) => _cancelHold(),
-      onTapCancel: () => _cancelHold(),
-      child: Container(
-        width: 140,
-        height: 140,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              AppTheme.criticalRed,
-              AppTheme.criticalRed.withOpacity(0.8),
-            ],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.criticalRed.withOpacity(0.5 + (_isHolding ? _holdProgress * 0.3 : 0)),
-              blurRadius: 30 + (_isHolding ? _holdProgress * 20 : 0),
-              spreadRadius: 10 + (_isHolding ? _holdProgress * 15 : 0),
-            ),
-          ],
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Progress ring
-            if (_isHolding || _holdProgress > 0)
-              SizedBox(
-                width: 136,
-                height: 136,
-                child: CircularProgressIndicator(
-                  value: _holdProgress,
-                  strokeWidth: 4,
-                  backgroundColor: Colors.white.withOpacity(0.2),
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.8)),
-                ),
-              ),
-            // Content
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (_isDispatching)
-                  const SpinKitDoubleBounce(color: Colors.white, size: 40)
-                else ...[
-                  const Icon(Icons.emergency, color: Colors.white, size: 36),
-                  const SizedBox(height: 4),
-                  Text(
-                    _isHolding ? 'Hold...' : 'SOS',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      )
-      .animate(target: _isHolding ? 1 : 0)
-      .scale(begin: const Offset(1, 1), end: const Offset(0.95, 0.95), duration: 100.ms),
+    return EmergencySosButton(
+      isDispatching: _isDispatching,
+      isHolding: _isHolding,
+      holdProgress: _holdProgress,
+      onHoldStart: _startHold,
+      onHoldEnd: _cancelHold,
+      onHoldCancel: _cancelHold,
+      onTapAlternative: _requestSosViaTap,
     );
   }
 
@@ -727,17 +716,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
                           
                           const SizedBox(height: 32),
 
-                          // SOS Button
                           Center(child: _buildSOSButton()),
-                          
-                          const SizedBox(height: 16),
-                          Center(
-                            child: Text(
-                              _isHolding ? 'Keep holding to confirm...' : 'Hold for 3 seconds to dispatch',
-                              style: AppTheme.bodySmall,
-                            ),
-                          ),
-                          
                           const SizedBox(height: 32),
                           
                           // Quick Actions

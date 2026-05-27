@@ -1,9 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../config.dart';
+import '../core/api_exception.dart';
+import '../core/auth_token_cache.dart';
 
-/// HTTP client for the SEADS backend. Parses JSON defensively so UI layers
-/// do not crash on 4xx bodies, HTML error pages, or alternate envelope shapes.
+/// HTTP client for the SEADS backend. Parses JSON defensively; surfaces
+/// [ApiException] for screen-level error handling.
 class ApiService {
   ApiService() : dio = _createDio();
 
@@ -19,7 +21,6 @@ class ApiService {
     ));
   }
 
-  /// Normalizes list-like DB/API fields (JSON array or comma-separated string).
   static List<String> coerceStringList(dynamic value) {
     if (value == null) return [];
     if (value is List) {
@@ -40,12 +41,11 @@ class ApiService {
     return 'Request failed';
   }
 
-  /// Extracts a list from `{ "key": [ ... ] }`, a bare array, or `{ "data": ... }`.
   static List<dynamic> _decodeList(dynamic data, String key) {
     if (data == null) return [];
     if (data is List) return List<dynamic>.from(data);
     if (data is Map) {
-      final map = Map<String, dynamic>.from(data as Map);
+      final map = Map<String, dynamic>.from(data);
       final direct = map[key];
       if (direct is List) return List<dynamic>.from(direct);
       final inner = map['data'];
@@ -62,7 +62,7 @@ class ApiService {
   static Map<String, dynamic> _decodeMapEnvelope(dynamic data) {
     if (data == null) return {};
     if (data is Map) {
-      final map = Map<String, dynamic>.from(data as Map);
+      final map = Map<String, dynamic>.from(data);
       if (map['data'] is Map) {
         return Map<String, dynamic>.from(map['data'] as Map);
       }
@@ -82,9 +82,47 @@ class ApiService {
     return out;
   }
 
-  /// Returns current Firebase ID token or null if not signed in.
-  Future<String?> _getToken() async {
-    return FirebaseAuth.instance.currentUser?.getIdToken();
+  static Map<String, dynamic>? _stringifyQuery(Map<String, dynamic>? filters) {
+    if (filters == null || filters.isEmpty) return null;
+    return filters.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+  }
+
+  Future<String> _requireToken() async {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (token == null) throw ApiException.notSignedIn();
+    AuthTokenCache.save(token);
+    return token;
+  }
+
+  Options _authOptions(String token) =>
+      Options(headers: {'Authorization': 'Bearer $token'});
+
+  void _ensureOk(Response<dynamic> response) {
+    if (!_statusOk(response.statusCode)) {
+      throw ApiException.fromResponse(response);
+    }
+  }
+
+  Future<List<dynamic>> _getList(String path, String listKey, {Map<String, dynamic>? query}) async {
+    final token = await _requireToken();
+    final response = await dio.get(
+      path,
+      queryParameters: query,
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+    return _decodeList(response.data, listKey);
+  }
+
+  Future<Map<String, dynamic>> _getMap(String path, {Map<String, dynamic>? query}) async {
+    final token = await _requireToken();
+    final response = await dio.get(
+      path,
+      queryParameters: query,
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+    return _decodeMapEnvelope(response.data);
   }
 
   Future<Map<String, dynamic>> dispatchAmbulance({
@@ -94,7 +132,7 @@ class ApiService {
     required String emergencyType,
     String? description,
   }) async {
-    final token = await _getToken();
+    final token = await _requireToken();
     final response = await dio.post(
       '/api/dispatch',
       data: {
@@ -104,214 +142,220 @@ class ApiService {
         'emergency_type': emergencyType,
         'description': description,
       },
-      options: Options(
-        headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      ),
+      options: _authOptions(token),
     );
-    if (!_statusOk(response.statusCode)) {
-      throw Exception(_errorMessage(response.data));
-    }
+    _ensureOk(response);
     final data = response.data;
-    if (data is Map) {
-      return Map<String, dynamic>.from(data as Map);
-    }
+    if (data is Map) return Map<String, dynamic>.from(data);
     return {'message': 'Ambulance request submitted.'};
   }
 
   Future<void> updateLocation({required double lat, required double lng}) async {
-    final token = await _getToken();
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     if (token == null) return;
-
     await dio.put(
       '/api/ambulances/location',
       data: {'lat': lat, 'lng': lng},
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
+      options: _authOptions(token),
     );
-    // Background GPS: failures are ignored so the stream keeps running.
   }
 
   Future<void> updateIncidentStatus({required String incidentId, required String status}) async {
-    final token = await _getToken();
-    if (token == null) return;
-
+    final token = await _requireToken();
     final response = await dio.put(
       '/api/incidents/$incidentId/status',
       data: {'status': status},
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
+      options: _authOptions(token),
     );
-    if (!_statusOk(response.statusCode)) {
-      throw Exception(_errorMessage(response.data));
-    }
+    _ensureOk(response);
   }
 
-  Future<List<dynamic>> getAssignments() async {
-    final token = await _getToken();
-    if (token == null) return [];
+  Future<List<dynamic>> getAssignments() => _getList('/api/incidents', 'incidents');
 
-    final response = await dio.get(
-      '/api/incidents',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return [];
-    return _decodeList(response.data, 'incidents');
-  }
-
-  Future<List<dynamic>> getAllAmbulances() async {
-    final token = await _getToken();
-    if (token == null) return [];
-
-    final response = await dio.get(
-      '/api/ambulances',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return [];
-    return _decodeList(response.data, 'ambulances');
-  }
+  Future<List<dynamic>> getAllAmbulances() => _getList('/api/ambulances', 'ambulances');
 
   Future<void> saveFcmToken(String fcmToken) async {
-    final token = await _getToken();
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     if (token == null) return;
-
     await dio.post(
       '/api/users/fcm-token',
       data: {'fcm_token': fcmToken},
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
+      options: _authOptions(token),
     );
-    // Non-fatal if token save fails (e.g. offline).
   }
 
-  Future<List<dynamic>> getEmergencyHistory() async {
-    final token = await _getToken();
-    if (token == null) return [];
+  Future<List<dynamic>> getEmergencyHistory() => _getList('/api/patients/history', 'history');
 
-    final response = await dio.get(
-      '/api/patients/history',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return [];
-    return _decodeList(response.data, 'history');
-  }
-
-  Future<List<dynamic>> getEmergencyContacts() async {
-    final token = await _getToken();
-    if (token == null) return [];
-
-    final response = await dio.get(
-      '/api/patients/contacts',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return [];
-    return _decodeList(response.data, 'contacts');
-  }
+  Future<List<dynamic>> getEmergencyContacts() => _getList('/api/patients/contacts', 'contacts');
 
   Future<Map<String, dynamic>> getMedicalProfile() async {
-    final token = await _getToken();
-    if (token == null) return {};
-
+    final token = await _requireToken();
     final response = await dio.get(
       '/api/patients/medical-profile',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
+      options: _authOptions(token),
     );
-    if (!_statusOk(response.statusCode)) return {};
+    if (response.statusCode == 404) return {};
+    _ensureOk(response);
     final decoded = _decodeMapEnvelope(response.data);
     if (decoded.isEmpty) return {};
     return _normalizeMedicalProfile(decoded);
   }
 
   Future<void> updateMedicalProfile(Map<String, dynamic> data) async {
-    final token = await _getToken();
-    if (token == null) return;
-
+    final token = await _requireToken();
     final response = await dio.put(
       '/api/patients/medical-profile',
       data: data,
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
+      options: _authOptions(token),
     );
-    if (!_statusOk(response.statusCode)) {
-      throw Exception(_errorMessage(response.data));
+    _ensureOk(response);
+  }
+
+  Future<List<dynamic>> getAssignmentHistory() =>
+      _getList('/api/paramedics/history', 'assignments');
+
+  Future<Map<String, dynamic>> getPerformanceStats({String period = 'week'}) =>
+      _getMap('/api/paramedics/stats', query: {'period': period});
+
+  Future<List<dynamic>> getEquipment() =>
+      _getList('/api/paramedics/equipment', 'equipment');
+
+  Future<void> submitEquipmentChecklist(List<Map<String, dynamic>> items) async {
+    final token = await _requireToken();
+    final response = await dio.post(
+      '/api/paramedics/equipment/checklist',
+      data: {'items': items},
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
+  Future<List<dynamic>> getShifts({DateTime? from, DateTime? to}) {
+    final query = <String, dynamic>{};
+    if (from != null) query['from'] = from.toUtc().toIso8601String();
+    if (to != null) query['to'] = to.toUtc().toIso8601String();
+    return _getList('/api/paramedics/shifts', 'shifts', query: query.isEmpty ? null : query);
+  }
+
+  Future<void> requestShiftSwap({required String shiftId, String? message}) async {
+    final token = await _requireToken();
+    final response = await dio.post(
+      '/api/paramedics/shifts/swap-request',
+      data: {'shift_id': shiftId, if (message != null) 'message': message},
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
+  Future<List<dynamic>> getFleet() => _getList('/api/dispatchers/fleet', 'fleet');
+
+  Future<List<dynamic>> getStaff() => _getList('/api/dispatchers/staff', 'staff');
+
+  Future<List<dynamic>> getIncidentLog({Map<String, dynamic>? filters}) =>
+      _getList('/api/dispatchers/incidents', 'incidents', query: _stringifyQuery(filters));
+
+  Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) =>
+      _getMap('/api/dispatchers/analytics', query: {'period': period});
+
+  Future<void> updateAmbulanceStatus({
+    required String ambulanceId,
+    required String status,
+  }) async {
+    final token = await _requireToken();
+    final response = await dio.put(
+      '/api/ambulances/$ambulanceId/status',
+      data: {'status': status},
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
+  Future<Map<String, dynamic>> addEmergencyContact({
+    required String name,
+    required String phone,
+    required String relationship,
+    bool isPrimary = false,
+  }) async {
+    final token = await _requireToken();
+    final response = await dio.post(
+      '/api/patients/contacts',
+      data: {
+        'name': name,
+        'phone': phone,
+        'relationship': relationship,
+        'is_primary': isPrimary,
+      },
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+    return _decodeMapEnvelope(response.data);
+  }
+
+  Future<Map<String, dynamic>> updateEmergencyContact({
+    required String contactId,
+    required String name,
+    required String phone,
+    required String relationship,
+    bool? isPrimary,
+  }) async {
+    final token = await _requireToken();
+    final response = await dio.put(
+      '/api/patients/contacts/$contactId',
+      data: {
+        'name': name,
+        'phone': phone,
+        'relationship': relationship,
+        if (isPrimary != null) 'is_primary': isPrimary,
+      },
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+    return _decodeMapEnvelope(response.data);
+  }
+
+  Future<void> deleteEmergencyContact(String contactId) async {
+    final token = await _requireToken();
+    final response = await dio.delete(
+      '/api/patients/contacts/$contactId',
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
+  Future<void> updateParamedicStatus(String status) async {
+    final token = await _requireToken();
+    final response = await dio.put(
+      '/api/paramedics/status',
+      data: {'status': status},
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
+  Future<void> assignAmbulance({
+    required String incidentId,
+    required String ambulanceId,
+  }) async {
+    final token = await _requireToken();
+    final response = await dio.post(
+      '/api/dispatchers/assign',
+      data: {
+        'incident_id': incidentId,
+        'ambulance_id': ambulanceId,
+      },
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
+  /// Maps API errors (including Dio network failures) to [ApiException].
+  static ApiException wrapError(Object error) {
+    if (error is ApiException) return error;
+    if (error is DioException) {
+      final response = error.response;
+      if (response != null) return ApiException.fromResponse(response);
+      return ApiException(error.message ?? 'Network error');
     }
-  }
-
-  Future<List<dynamic>> getAssignmentHistory() async {
-    final token = await _getToken();
-    if (token == null) return [];
-
-    final response = await dio.get(
-      '/api/paramedics/history',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return [];
-    return _decodeList(response.data, 'assignments');
-  }
-
-  Future<Map<String, dynamic>> getPerformanceStats({String period = 'week'}) async {
-    final token = await _getToken();
-    if (token == null) return {};
-
-    final response = await dio.get(
-      '/api/paramedics/stats',
-      queryParameters: {'period': period},
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return {};
-    return _decodeMapEnvelope(response.data);
-  }
-
-  Future<List<dynamic>> getFleet() async {
-    final token = await _getToken();
-    if (token == null) return [];
-
-    final response = await dio.get(
-      '/api/dispatchers/fleet',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return [];
-    return _decodeList(response.data, 'fleet');
-  }
-
-  Future<List<dynamic>> getStaff() async {
-    final token = await _getToken();
-    if (token == null) return [];
-
-    final response = await dio.get(
-      '/api/dispatchers/staff',
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return [];
-    return _decodeList(response.data, 'staff');
-  }
-
-  Future<List<dynamic>> getIncidentLog({Map<String, dynamic>? filters}) async {
-    final token = await _getToken();
-    if (token == null) return [];
-
-    final response = await dio.get(
-      '/api/dispatchers/incidents',
-      queryParameters: _stringifyQuery(filters),
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return [];
-    return _decodeList(response.data, 'incidents');
-  }
-
-  /// Dio query parameters must be `String` | `num` for reliable encoding.
-  static Map<String, dynamic>? _stringifyQuery(Map<String, dynamic>? filters) {
-    if (filters == null || filters.isEmpty) return null;
-    return filters.map((k, v) => MapEntry(k, v?.toString() ?? ''));
-  }
-
-  Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) async {
-    final token = await _getToken();
-    if (token == null) return {};
-
-    final response = await dio.get(
-      '/api/dispatchers/analytics',
-      queryParameters: {'period': period},
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
-    if (!_statusOk(response.statusCode)) return {};
-    return _decodeMapEnvelope(response.data);
+    return ApiException(error.toString());
   }
 }

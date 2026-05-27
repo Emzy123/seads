@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
+import '../../config.dart';
+import '../../core/demo_data.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../services/api_service.dart';
 
@@ -43,22 +46,15 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _incidents = _getMockIncidents();
+        _incidents = AppConfig.isDemoMode ? DemoData.mockIncidents() : [];
         _isLoading = false;
       });
+      if (!AppConfig.isDemoMode) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Incident log unavailable: $e'), backgroundColor: AppTheme.criticalRed),
+        );
+      }
     }
-  }
-
-  List<dynamic> _getMockIncidents() {
-    return [
-      {'id': 'INC-2024-001', 'emergency_type': 'Cardiac Arrest', 'status': 'completed', 'priority': 'critical', 'patient_name': 'John Doe', 'paramedic': 'Smith, J.', 'ambulance': 'AMB-201', 'created_at': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(), 'completed_at': DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String(), 'location': '123 Main St', 'hospital': 'General Hospital'},
-      {'id': 'INC-2024-002', 'emergency_type': 'Vehicle Accident', 'status': 'completed', 'priority': 'high', 'patient_name': 'Jane Smith', 'paramedic': 'Johnson, S.', 'ambulance': 'AMB-202', 'created_at': DateTime.now().subtract(const Duration(hours: 4)).toIso8601String(), 'completed_at': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(), 'location': '456 Oak Ave', 'hospital': 'Memorial Hospital'},
-      {'id': 'INC-2024-003', 'emergency_type': 'Respiratory Distress', 'status': 'in_progress', 'priority': 'high', 'patient_name': 'Bob Wilson', 'paramedic': 'Davis, M.', 'ambulance': 'AMB-204', 'created_at': DateTime.now().subtract(const Duration(minutes: 15)).toIso8601String(), 'completed_at': null, 'location': '789 Pine Rd', 'hospital': 'General Hospital'},
-      {'id': 'INC-2024-004', 'emergency_type': 'Fall Injury', 'status': 'completed', 'priority': 'medium', 'patient_name': 'Alice Brown', 'paramedic': 'Wilson, R.', 'ambulance': 'AMB-205', 'created_at': DateTime.now().subtract(const Duration(hours: 6)).toIso8601String(), 'completed_at': DateTime.now().subtract(const Duration(hours: 4)).toIso8601String(), 'location': '321 Elm St', 'hospital': 'Community Hospital'},
-      {'id': 'INC-2024-005', 'emergency_type': 'Allergic Reaction', 'status': 'cancelled', 'priority': 'medium', 'patient_name': 'Tom Green', 'paramedic': 'Smith, J.', 'ambulance': 'AMB-201', 'created_at': DateTime.now().subtract(const Duration(hours: 8)).toIso8601String(), 'completed_at': null, 'location': '654 Maple Dr', 'hospital': 'General Hospital'},
-      {'id': 'INC-2024-006', 'emergency_type': 'Stroke Symptoms', 'status': 'completed', 'priority': 'critical', 'patient_name': 'Mary White', 'paramedic': 'Johnson, S.', 'ambulance': 'AMB-202', 'created_at': DateTime.now().subtract(const Duration(hours: 12)).toIso8601String(), 'completed_at': DateTime.now().subtract(const Duration(hours: 10)).toIso8601String(), 'location': '987 Cedar Ln', 'hospital': 'Stroke Center'},
-      {'id': 'INC-2024-007', 'emergency_type': 'Chest Pain', 'status': 'completed', 'priority': 'high', 'patient_name': 'David Lee', 'paramedic': 'Davis, M.', 'ambulance': 'AMB-204', 'created_at': DateTime.now().subtract(const Duration(days: 1, hours: 2)).toIso8601String(), 'completed_at': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'location': '147 Birch St', 'hospital': 'Heart Institute'},
-    ];
   }
 
   List<dynamic> get _filteredIncidents {

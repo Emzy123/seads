@@ -18,9 +18,13 @@ void main() {
       ),
     );
 
-    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
 
     expect(find.text('SEADS'), findsOneWidget);
     expect(find.text('Get Started'), findsOneWidget);
+
+    // Flush welcome screen auto-scroll timers so the test binding stays clean.
+    await tester.pump(const Duration(minutes: 1));
   });
 }

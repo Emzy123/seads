@@ -3,6 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import '../../config.dart';
+import '../../core/demo_data.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../services/api_service.dart';
 
@@ -30,45 +33,22 @@ class _PerformanceStatsScreenState extends ConsumerState<PerformanceStatsScreen>
       final stats = await _apiService.getPerformanceStats(period: _selectedPeriod);
       if (mounted) {
         setState(() {
-          _stats = stats;
+          _stats = DemoData.orMap(stats, DemoData.mockPerformanceStats);
           _isLoading = false;
         });
       }
     } catch (e) {
-      // Use mock data for demo
+      if (!mounted) return;
       setState(() {
-        _stats = _getMockStats();
+        _stats = AppConfig.isDemoMode ? DemoData.mockPerformanceStats() : {};
         _isLoading = false;
       });
+      if (!AppConfig.isDemoMode) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Stats unavailable: $e'), backgroundColor: AppTheme.criticalRed),
+        );
+      }
     }
-  }
-
-  Map<String, dynamic> _getMockStats() {
-    return {
-      'total_assignments': 24,
-      'completed_assignments': 22,
-      'cancelled_assignments': 2,
-      'average_response_time': '4.2 min',
-      'average_completion_time': '28 min',
-      'total_distance': 342.5,
-      'patient_rating': 4.8,
-      'on_time_percentage': 95,
-      'weekly_data': [
-        {'day': 'Mon', 'count': 4, 'time': 4.5},
-        {'day': 'Tue', 'count': 3, 'time': 3.8},
-        {'day': 'Wed', 'count': 5, 'time': 4.2},
-        {'day': 'Thu', 'count': 2, 'time': 5.1},
-        {'day': 'Fri', 'count': 4, 'time': 3.9},
-        {'day': 'Sat', 'count': 6, 'time': 4.0},
-        {'day': 'Sun', 'count': 3, 'time': 4.8},
-      ],
-      'emergency_types': [
-        {'type': 'Cardiac', 'count': 8, 'color': 0xFFFF6B6B},
-        {'type': 'Trauma', 'count': 6, 'color': 0xFFFFA502},
-        {'type': 'Respiratory', 'count': 4, 'color': 0xFF2ED573},
-        {'type': 'Other', 'count': 6, 'color': 0xFF70A1FF},
-      ],
-    };
   }
 
   @override

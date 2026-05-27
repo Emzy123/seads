@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
+import '../../config.dart';
+import '../../core/demo_data.dart';
+import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 
 class ReportsAnalyticsScreen extends ConsumerStatefulWidget {
@@ -14,58 +18,62 @@ class ReportsAnalyticsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen> {
+  final ApiService _apiService = ApiService();
   String _selectedPeriod = 'week';
   String _selectedReport = 'overview';
+  Map<String, dynamic> _analyticsData = {};
+  bool _isLoading = true;
 
-  final Map<String, dynamic> _mockData = {
-    'overview': {
-      'total_incidents': 156,
-      'avg_response_time': '4.2 min',
-      'completion_rate': 94.2,
-      'patient_satisfaction': 4.7,
-      'daily_incidents': [12, 18, 15, 22, 19, 25, 45],
-      'response_time_trend': [5.1, 4.8, 4.5, 4.3, 4.2, 4.1, 4.2],
-    },
-    'incidents': {
-      'by_type': [
-        {'type': 'Cardiac Emergency', 'count': 42, 'percentage': 27},
-        {'type': 'Trauma', 'count': 38, 'percentage': 24},
-        {'type': 'Respiratory', 'count': 28, 'percentage': 18},
-        {'type': 'Neurological', 'count': 18, 'percentage': 12},
-        {'type': 'Other', 'count': 30, 'percentage': 19},
-      ],
-      'by_priority': [
-        {'priority': 'Critical', 'count': 45, 'color': 0xFFFF6B6B},
-        {'priority': 'High', 'count': 67, 'color': 0xFFFFA502},
-        {'priority': 'Medium', 'count': 32, 'color': 0xFF2ED573},
-        {'priority': 'Low', 'count': 12, 'color': 0xFF70A1FF},
-      ],
-      'by_hour': List.generate(24, (i) => {'hour': i, 'count': Random().nextInt(20) + 1}),
-    },
-    'fleet': {
-      'utilization_rate': 78.5,
-      'avg_distance_per_incident': 8.3,
-      'fuel_consumption': 1245,
-      'maintenance_cost': 15400,
-      'vehicle_performance': [
-        {'id': 'AMB-201', 'incidents': 28, 'rating': 4.8},
-        {'id': 'AMB-202', 'incidents': 32, 'rating': 4.6},
-        {'id': 'AMB-204', 'incidents': 24, 'rating': 4.9},
-        {'id': 'AMB-205', 'incidents': 31, 'rating': 4.7},
-      ],
-    },
-    'personnel': {
-      'total_paramedics': 24,
-      'on_duty': 18,
-      'avg_rating': 4.6,
-      'top_performers': [
-        {'name': 'Paramedic Johnson', 'incidents': 42, 'rating': 4.9, 'response_time': '3.2 min'},
-        {'name': 'Paramedic Smith', 'incidents': 38, 'rating': 4.8, 'response_time': '3.5 min'},
-        {'name': 'Paramedic Davis', 'incidents': 35, 'rating': 4.8, 'response_time': '3.4 min'},
-        {'name': 'Paramedic Wilson', 'incidents': 33, 'rating': 4.7, 'response_time': '3.6 min'},
-      ],
-    },
-  };
+  @override
+  void initState() {
+    super.initState();
+    _fetchAnalytics();
+  }
+
+  Future<void> _fetchAnalytics() async {
+    setState(() => _isLoading = true);
+    try {
+      final raw = await _apiService.getAnalytics(period: _selectedPeriod);
+      if (!mounted) return;
+      setState(() {
+        _analyticsData = _normalizeAnalytics(raw);
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _analyticsData = AppConfig.isDemoMode ? DemoData.mockAnalytics() : {};
+        _isLoading = false;
+      });
+      if (!AppConfig.isDemoMode) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Analytics unavailable: $e'), backgroundColor: AppTheme.criticalRed),
+        );
+      }
+    }
+  }
+
+  /// Maps API envelope into tab keys used by the UI.
+  Map<String, dynamic> _normalizeAnalytics(Map<String, dynamic> raw) {
+    if (raw.isEmpty) {
+      return AppConfig.isDemoMode ? DemoData.mockAnalytics() : {};
+    }
+    final fallback = AppConfig.isDemoMode ? DemoData.mockAnalytics() : <String, dynamic>{};
+    return {
+      'overview': raw['overview'] is Map
+          ? Map<String, dynamic>.from(raw['overview'] as Map)
+          : fallback['overview'] ?? <String, dynamic>{},
+      'incidents': raw['incidents'] is Map
+          ? Map<String, dynamic>.from(raw['incidents'] as Map)
+          : fallback['incidents'] ?? <String, dynamic>{},
+      'fleet': raw['fleet'] is Map
+          ? Map<String, dynamic>.from(raw['fleet'] as Map)
+          : fallback['fleet'] ?? <String, dynamic>{},
+      'personnel': raw['personnel'] is Map
+          ? Map<String, dynamic>.from(raw['personnel'] as Map)
+          : fallback['personnel'] ?? <String, dynamic>{},
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +98,10 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.calendar_today),
-            onSelected: (value) => setState(() => _selectedPeriod = value),
+            onSelected: (value) {
+              setState(() => _selectedPeriod = value);
+              _fetchAnalytics();
+            },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'day', child: Text('Today')),
               const PopupMenuItem(value: 'week', child: Text('This Week')),
@@ -106,6 +117,26 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
   }
 
   Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(child: SpinKitPulse(color: Colors.orangeAccent, size: 60));
+    }
+    if (_analyticsData.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.analytics_outlined, size: 64, color: AppTheme.textMuted),
+              const SizedBox(height: 16),
+              Text('No analytics data', style: AppTheme.headingSmall),
+              const SizedBox(height: 12),
+              ElevatedButton(onPressed: _fetchAnalytics, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.only(top: 100, left: 16, right: 16, bottom: 32),
       child: Column(
@@ -183,7 +214,7 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
   }
 
   Widget _buildOverviewReport() {
-    final data = _mockData['overview'];
+    final data = _analyticsData['overview'] as Map<String, dynamic>? ?? {};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -254,7 +285,7 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
   }
 
   Widget _buildIncidentsReport() {
-    final data = _mockData['incidents'];
+    final data = _analyticsData['incidents'] as Map<String, dynamic>? ?? {};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -281,7 +312,7 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
   }
 
   Widget _buildFleetReport() {
-    final data = _mockData['fleet'];
+    final data = _analyticsData['fleet'] as Map<String, dynamic>? ?? {};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -345,7 +376,7 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
   }
 
   Widget _buildPersonnelReport() {
-    final data = _mockData['personnel'];
+    final data = _analyticsData['personnel'] as Map<String, dynamic>? ?? {};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

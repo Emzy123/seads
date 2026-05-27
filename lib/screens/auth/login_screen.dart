@@ -42,13 +42,88 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted) {
-        context.go('/home');
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AlertDialog(
+              backgroundColor: Colors.black87,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Colors.white10),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 80)
+                      .animate()
+                      .scale(duration: 500.ms, curve: Curves.easeOutBack),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Login Successful!',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Welcome back. Redirecting to your dashboard...',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 24),
+                  const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        await Future.delayed(const Duration(milliseconds: 1500));
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop(); // dismiss dialog
+          context.go('/home');
+        }
       }
     } catch (e) {
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
         _isLoading = false;
       });
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AlertDialog(
+              backgroundColor: Colors.black87,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Colors.white10),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.redAccent),
+                  SizedBox(width: 8),
+                  Text('Login Failed', style: TextStyle(color: Colors.white)),
+                ],
+              ),
+              content: Text(
+                _errorMessage!,
+                style: const TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK', style: TextStyle(color: Colors.redAccent)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
     }
   }
 

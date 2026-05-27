@@ -15,8 +15,18 @@ import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/location_service.dart';
 import '../../services/api_service.dart';
+import '../../config.dart';
+import '../../core/breakpoints.dart';
+import '../../core/demo_data.dart';
+import '../../core/equipment_helpers.dart';
+import '../../core/api_exception.dart';
 import '../../theme/app_theme.dart';
+import '../../core/offline_queue.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/status_badge.dart';
+import '../../widgets/sync_status_banner.dart';
+import '../../services/background_location_service.dart';
+import '../../services/realtime_sync_service.dart';
 
 class ParamedicHomeScreen extends ConsumerStatefulWidget {
   const ParamedicHomeScreen({super.key});
@@ -32,6 +42,8 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
   
   Position? _currentPosition;
   StreamSubscription<Position>? _positionStream;
+  final RealtimeSyncService _realtime = RealtimeSyncService();
+  int _pendingSyncCount = 0;
   
   List<dynamic> _assignments = [];
   bool _isLoading = true;
@@ -41,15 +53,7 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
   String _currentStatus = 'available';
   final List<String> _statusOptions = ['available', 'responding', 'on_scene', 'transporting', 'offline'];
   
-  // Equipment data
-  final List<Map<String, dynamic>> _equipment = [
-    {'name': 'Defibrillator', 'checked': true, 'lastChecked': DateTime.now().subtract(const Duration(hours: 2)), 'status': 'operational'},
-    {'name': 'Oxygen Tank', 'checked': true, 'lastChecked': DateTime.now().subtract(const Duration(hours: 4)), 'status': 'operational'},
-    {'name': 'First Aid Kit', 'checked': false, 'lastChecked': DateTime.now().subtract(const Duration(days: 1)), 'status': 'warning'},
-    {'name': 'Stretcher', 'checked': true, 'lastChecked': DateTime.now().subtract(const Duration(hours: 6)), 'status': 'operational'},
-    {'name': 'Ventilator', 'checked': true, 'lastChecked': DateTime.now().subtract(const Duration(hours: 3)), 'status': 'operational'},
-    {'name': 'Medication Bag', 'checked': false, 'lastChecked': DateTime.now().subtract(const Duration(days: 2)), 'status': 'critical'},
-  ];
+  List<Map<String, dynamic>> _equipment = [];
 
   // Performance stats
   final Map<String, dynamic> _performanceStats = {
@@ -69,7 +73,27 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
   void initState() {
     super.initState();
     _initTrackingAndData();
-    _generateMockShifts();
+    _loadEquipment();
+    if (AppConfig.isDemoMode) {
+      _generateMockShifts();
+    }
+  }
+
+  Future<void> _loadEquipment() async {
+    try {
+      final raw = await _apiService.getEquipment();
+      if (!mounted) return;
+      setState(() {
+        _equipment = raw
+            .whereType<Map>()
+            .map((e) => normalizeEquipmentItem(Map<String, dynamic>.from(e)))
+            .toList();
+      });
+    } catch (_) {
+      if (AppConfig.isDemoMode && mounted) {
+        setState(() => _equipment = DemoData.mockEquipment());
+      }
+    }
   }
 
   void _generateMockShifts() {
@@ -87,7 +111,24 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
   @override
   void dispose() {
     _positionStream?.cancel();
+    _realtime.dispose();
+    BackgroundLocationService().stop();
     super.dispose();
+  }
+
+  Future<void> _refreshPendingCount() async {
+    final count = OfflineQueue.pendingCount;
+    if (mounted && count != _pendingSyncCount) {
+      setState(() => _pendingSyncCount = count);
+    }
+  }
+
+  Future<void> _syncBackgroundTracking() async {
+    if (_currentStatus == 'offline') {
+      await BackgroundLocationService().stop();
+    } else {
+      await BackgroundLocationService().startIfNeeded();
+    }
   }
 
   Future<void> _initTrackingAndData() async {
@@ -115,34 +156,34 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
   }
 
   Future<void> _fetchAssignments() async {
+    await _refreshPendingCount();
     setState(() => _isLoading = true);
     try {
       final assignments = await _apiService.getAssignments();
       if (mounted) {
         setState(() => _assignments = assignments);
       }
+      _realtime.reportSuccess();
     } catch (e) {
-      // Mock data
-      setState(() => _assignments = _getMockAssignments());
+      _realtime.reportFailure();
+      if (mounted) {
+        setState(() {
+          _assignments = AppConfig.isDemoMode ? DemoData.mockAssignments() : [];
+        });
+        if (!AppConfig.isDemoMode) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+            content: Text(ApiService.wrapError(e).userMessage),
+            backgroundColor: AppTheme.criticalRed,
+          ),
+          );
+        }
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  List<dynamic> _getMockAssignments() {
-    return [
-      {
-        'id': 'INC-001',
-        'status': 'dispatched',
-        'emergency_type': 'Cardiac Arrest',
-        'patient': {'name': 'Emma Watson'},
-        'location': {'lat': 40.7128, 'lng': -74.0060},
-        'priority': 'critical',
-        'created_at': DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String(),
-      },
-    ];
   }
 
   Future<void> _updateStatus(String incidentId, String newStatus) async {
@@ -151,18 +192,62 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
       await _apiService.updateIncidentStatus(incidentId: incidentId, status: newStatus);
       await _fetchAssignments();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update status: $e'), backgroundColor: AppTheme.criticalRed),
+      try {
+        await OfflineQueue.enqueue(
+          type: 'incident_status',
+          payload: {'incident_id': incidentId, 'status': newStatus},
         );
+        await _refreshPendingCount();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Status update queued for sync')),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(ApiService.wrapError(e).userMessage),
+              backgroundColor: AppTheme.criticalRed,
+            ),
+          );
+        }
       }
     }
   }
 
-  void _changeParamedicStatus(String newStatus) {
+  Future<void> _changeParamedicStatus(String newStatus) async {
     AppTheme.hapticLight();
+    final previous = _currentStatus;
     setState(() => _currentStatus = newStatus);
-    // TODO: Sync to backend
+    try {
+      await _apiService.updateParamedicStatus(newStatus);
+      await _syncBackgroundTracking();
+    } catch (e) {
+      try {
+        await OfflineQueue.enqueue(
+          type: 'paramedic_status',
+          payload: {'status': newStatus},
+        );
+        await _refreshPendingCount();
+        await _syncBackgroundTracking();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Status saved — will sync when online')),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() => _currentStatus = previous);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(ApiService.wrapError(e).userMessage),
+              backgroundColor: AppTheme.criticalRed,
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _checkEquipment(int index) {
@@ -200,8 +285,8 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Center(
-              child: StatusIndicator(
-                status: _currentStatus == 'offline' ? 'offline' : 'online',
+              child: StatusBadge(
+                status: _currentStatus,
                 label: _currentStatus.replaceAll('_', ' ').toUpperCase(),
               ),
             ),
@@ -211,6 +296,11 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
       body: AnimatedBackground(
         child: Column(
           children: [
+            SyncStatusBanner(
+              pendingCount: _pendingSyncCount,
+              pollInterval: _realtime.currentInterval,
+              showBackoff: _realtime.currentInterval.inSeconds > 2,
+            ),
             // Status Toggle Bar
             _buildStatusToggle(),
             
@@ -323,13 +413,14 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
       orElse: () => null,
     );
 
-    return Stack(
-      children: [
-        // Map
-        FlutterMap(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useSplit = SeadsBreakpoints.isMediumOrWider(context);
+
+        final map = FlutterMap(
           mapController: _mapController,
           options: MapOptions(
-            initialCenter: _currentPosition != null 
+            initialCenter: _currentPosition != null
                 ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
                 : const LatLng(0, 0),
             initialZoom: 15.0,
@@ -346,53 +437,74 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
                     point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
                     width: 80,
                     height: 80,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent.withOpacity(0.3),
-                        shape: BoxShape.circle,
+                    child: Semantics(
+                      label: 'Your ambulance location',
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.greenAccent.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.local_shipping, color: Colors.greenAccent, size: 30)
+                            .animate(onPlay: (c) => c.repeat(reverse: true))
+                            .scale(begin: const Offset(0.8, 0.8), end: const Offset(1.2, 1.2), duration: 1.seconds),
                       ),
-                      child: const Icon(Icons.local_shipping, color: Colors.greenAccent, size: 30)
-                          .animate(onPlay: (c) => c.repeat(reverse: true))
-                          .scale(begin: const Offset(0.8, 0.8), end: const Offset(1.2, 1.2), duration: 1.seconds),
                     ),
                   ),
                 ],
               ),
           ],
-        ),
+        );
 
-        // Assignment Panel
-        if (activeAssignment != null)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildAssignmentCard(activeAssignment),
-          )
-        else
-          Positioned(
-            bottom: 100,
-            left: 20,
-            right: 20,
-            child: GlassCard(
-              borderRadius: 20,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 60),
-                  const SizedBox(height: 16),
-                  Text('No Active Emergencies', style: AppTheme.headingSmall),
-                  const SizedBox(height: 8),
-                  Text(
-                    'You are currently available. Standby for dispatch.',
-                    style: AppTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+        final assignmentPanel = activeAssignment != null
+            ? _buildAssignmentCard(activeAssignment)
+            : GlassCard(
+                borderRadius: 20,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 60),
+                    const SizedBox(height: 16),
+                    Text('No Active Emergencies', style: AppTheme.headingSmall),
+                    const SizedBox(height: 8),
+                    Text(
+                      'You are currently available. Standby for dispatch.',
+                      style: AppTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+
+        if (useSplit) {
+          return Row(
+            children: [
+              Expanded(flex: 3, child: map),
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SingleChildScrollView(child: assignmentPanel),
+                ),
               ),
-            ),
-          ),
-      ],
+            ],
+          );
+        }
+
+        return Stack(
+          children: [
+            map,
+            if (activeAssignment != null)
+              Positioned(bottom: 0, left: 0, right: 0, child: assignmentPanel)
+            else
+              Positioned(
+                bottom: 100,
+                left: 20,
+                right: 20,
+                child: assignmentPanel,
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -808,14 +920,13 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
   }
 
   Widget _buildEquipmentItem(int index, Map<String, dynamic> item) {
-    final isChecked = item['checked'] as bool;
-    final lastChecked = item['lastChecked'] as DateTime;
-    final hoursAgo = DateTime.now().difference(lastChecked).inHours;
-    final isStale = hoursAgo > 12;
-    final status = item['status'] as String;
-    
+    final isChecked = item['checked'] == true;
+    final status = item['status']?.toString() ?? 'ok';
+    final isStale = status == 'warning' || status == 'low' || status == 'critical';
+
     Color statusColor;
     switch (status) {
+      case 'ok':
       case 'operational':
         statusColor = Colors.greenAccent;
         break;
@@ -823,6 +934,7 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
         statusColor = AppTheme.priorityHigh;
         break;
       case 'critical':
+      case 'low':
         statusColor = AppTheme.criticalRed;
         break;
       default:
@@ -884,7 +996,7 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      isChecked ? 'Just checked' : '$hoursAgo hours ago',
+                      isChecked ? 'Just checked' : item['lastChecked']?.toString() ?? 'Not checked',
                       style: AppTheme.bodySmall,
                     ),
                   ],

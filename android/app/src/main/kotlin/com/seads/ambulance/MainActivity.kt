@@ -1,4 +1,4 @@
-package com.example.seads
+package com.seads.ambulance
 
 import io.flutter.embedding.android.FlutterActivity
 

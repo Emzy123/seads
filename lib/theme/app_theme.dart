@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// SEADS Global Design System
 /// Dark Glassmorphic UI/UX Specification
@@ -147,6 +148,83 @@ class AppTheme {
   static void hapticMedium() => HapticFeedback.mediumImpact();
   static void hapticHeavy() => HapticFeedback.heavyImpact();
   static void hapticSuccess() => HapticFeedback.vibrate();
+
+  /// Whether motion/animation should run (respects system reduced motion).
+  static bool animationsEnabled(BuildContext context) {
+    return !MediaQuery.disableAnimationsOf(context);
+  }
+
+  /// Dark theme (default).
+  static ThemeData buildThemeData() => _buildTheme(brightness: Brightness.dark);
+
+  /// Light theme for bright environments / accessibility preference.
+  static ThemeData buildLightThemeData() => _buildTheme(brightness: Brightness.light);
+
+  static ThemeData _buildTheme({required Brightness brightness}) {
+    final isDark = brightness == Brightness.dark;
+    final base = ThemeData(
+      brightness: brightness,
+      useMaterial3: true,
+      colorScheme: isDark
+          ? const ColorScheme.dark(
+              primary: criticalRed,
+              secondary: criticalTeal,
+              surface: bgSecondary,
+              onPrimary: Colors.white,
+              onSecondary: Colors.black,
+              onSurface: textPrimary,
+            )
+          : ColorScheme.light(
+              primary: criticalRed,
+              secondary: criticalTeal,
+              surface: const Color(0xFFF4F6FA),
+              onPrimary: Colors.white,
+              onSecondary: Colors.black87,
+              onSurface: const Color(0xFF1A2332),
+            ),
+      scaffoldBackgroundColor: isDark ? bgPrimary : const Color(0xFFE8EDF5),
+    );
+    return base.copyWith(
+      textTheme: GoogleFonts.outfitTextTheme(base.textTheme).apply(
+        bodyColor: textSecondary,
+        displayColor: textPrimary,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: textPrimary,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: criticalRed,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.08),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: criticalTeal),
+        ),
+        labelStyle: const TextStyle(color: textMuted),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: glassBackground,
+        contentTextStyle: bodyMedium,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
 }
 
 /// Animated breathing pulse widget for status indicators

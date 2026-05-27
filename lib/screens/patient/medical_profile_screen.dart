@@ -2,8 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
-import '../../widgets/app_drawer.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_drawer.dart';
+import '../../widgets/seads_states.dart';
 
 class MedicalProfileScreen extends ConsumerStatefulWidget {
   const MedicalProfileScreen({super.key});
@@ -17,6 +18,7 @@ class _MedicalProfileScreenState extends ConsumerState<MedicalProfileScreen> {
   Map<String, dynamic>? _profile;
   bool _isLoading = true;
   bool _isEditing = false;
+  String? _error;
 
   final _bloodTypeController = TextEditingController();
   final _allergiesController = TextEditingController();
@@ -42,7 +44,10 @@ class _MedicalProfileScreenState extends ConsumerState<MedicalProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _error = ApiService.wrapError(e).userMessage;
+          _isLoading = false;
+        });
       }
     }
   }
@@ -85,8 +90,10 @@ class _MedicalProfileScreenState extends ConsumerState<MedicalProfileScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: SpinKitPulse(color: Colors.blueAccent, size: 60))
-          : _buildContent(),
+          ? const SeadsLoadingState()
+          : _error != null
+              ? SeadsErrorState(message: _error, onRetry: _fetchProfile)
+              : _buildContent(),
     );
   }
 

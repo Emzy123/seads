@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
-import '../../widgets/app_drawer.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_drawer.dart';
+import '../../widgets/seads_states.dart';
 
 class EmergencyHistoryScreen extends ConsumerStatefulWidget {
   const EmergencyHistoryScreen({super.key});
@@ -18,6 +19,7 @@ class _EmergencyHistoryScreenState extends ConsumerState<EmergencyHistoryScreen>
   final ApiService _apiService = ApiService();
   List<dynamic> _history = [];
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -26,6 +28,10 @@ class _EmergencyHistoryScreenState extends ConsumerState<EmergencyHistoryScreen>
   }
 
   Future<void> _fetchHistory() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final history = await _apiService.getEmergencyHistory();
       if (mounted) {
@@ -36,7 +42,10 @@ class _EmergencyHistoryScreenState extends ConsumerState<EmergencyHistoryScreen>
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _error = ApiService.wrapError(e).userMessage;
+          _isLoading = false;
+        });
       }
     }
   }
@@ -65,10 +74,12 @@ class _EmergencyHistoryScreenState extends ConsumerState<EmergencyHistoryScreen>
         ],
       ),
       body: _isLoading
-          ? const Center(child: SpinKitPulse(color: Colors.blueAccent, size: 60))
-          : _history.isEmpty
-              ? _buildEmptyState()
-              : _buildHistoryList(),
+          ? const SeadsLoadingState()
+          : _error != null
+              ? SeadsErrorState(message: _error, onRetry: _fetchHistory)
+              : _history.isEmpty
+                  ? _buildEmptyState()
+                  : _buildHistoryList(),
     );
   }
 
