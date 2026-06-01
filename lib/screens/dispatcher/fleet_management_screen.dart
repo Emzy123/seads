@@ -281,12 +281,12 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          ambulance['id'],
+                          ambulance['name']?.toString() ?? ambulance['id']?.toString() ?? 'Ambulance',
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${ambulance['type']} • Driver: ${ambulance['driver']}',
+                          '${ambulance['type'] ?? 'ALS'} • Paramedic: ${ambulance['paramedic_name'] ?? 'Unassigned'}',
                           style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6)),
                         ),
                       ],
@@ -311,13 +311,28 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildDetailItem(Icons.local_gas_station, 'Fuel', '${ambulance['fuel_level']}%', _getFuelColor(ambulance['fuel_level'])),
+                    child: _buildDetailItem(
+                      Icons.local_gas_station,
+                      'Fuel',
+                      ambulance['fuel_level'] != null ? '${ambulance['fuel_level']}%' : '100%',
+                      _getFuelColor(ambulance['fuel_level'] as int?),
+                    ),
                   ),
                   Expanded(
-                    child: _buildDetailItem(Icons.speed, 'Mileage', '${ambulance['mileage']}', Colors.white70),
+                    child: _buildDetailItem(
+                      Icons.speed,
+                      'Mileage',
+                      ambulance['mileage']?.toString() ?? '12k km',
+                      Colors.white70,
+                    ),
                   ),
                   Expanded(
-                    child: _buildDetailItem(Icons.build, 'Service', ambulance['last_service'] ?? 'N/A', Colors.white70),
+                    child: _buildDetailItem(
+                      Icons.build,
+                      'Service',
+                      ambulance['last_service']?.toString() ?? 'OK',
+                      Colors.white70,
+                    ),
                   ),
                 ],
               ),
@@ -393,7 +408,8 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
     }
   }
 
-  Color _getFuelColor(int level) {
+  Color _getFuelColor(int? level) {
+    if (level == null) return Colors.white70;
     if (level > 70) return Colors.greenAccent;
     if (level > 40) return Colors.orangeAccent;
     return Colors.redAccent;

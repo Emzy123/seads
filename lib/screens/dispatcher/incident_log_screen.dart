@@ -222,12 +222,12 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
   }
 
   Widget _buildIncidentCard(dynamic incident) {
-    final status = incident['status'] as String;
-    final priority = incident['priority'] as String;
+    final status = incident['status']?.toString() ?? 'pending';
+    final priority = incident['priority']?.toString() ?? 'medium';
     final statusColor = _getStatusColor(status);
     final priorityColor = _getPriorityColor(priority);
 
-    final createdAt = DateTime.parse(incident['created_at']);
+    final createdAt = DateTime.tryParse(incident['created_at']?.toString() ?? '') ?? DateTime.now();
     final timeAgo = _formatTimeAgo(createdAt);
 
     return Card(

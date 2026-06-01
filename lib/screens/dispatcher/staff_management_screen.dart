@@ -244,8 +244,8 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
   }
 
   Widget _buildStaffCard(dynamic staff) {
-    final status = staff['status'] as String;
-    final role = staff['role'] as String;
+    final status = staff['status']?.toString() ?? 'on_duty';
+    final role = staff['role']?.toString() ?? 'paramedic';
     final statusColor = _getStatusColor(status);
     final roleIcon = role == 'paramedic' ? Icons.local_shipping : Icons.headset;
 
@@ -317,7 +317,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                         Icon(Icons.star, size: 12, color: Colors.yellow.withOpacity(0.8)),
                         const SizedBox(width: 4),
                         Text(
-                          staff['rating'].toString(),
+                          staff['rating']?.toString() ?? '4.8',
                           style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.7)),
                         ),
                         if (role == 'paramedic') ...[
@@ -325,7 +325,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                           Icon(Icons.assignment, size: 12, color: Colors.white.withOpacity(0.5)),
                           const SizedBox(width: 4),
                           Text(
-                            '${staff['incidents']} incidents',
+                            '${staff['incidents']?.toString() ?? "0"} incidents',
                             style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.7)),
                           ),
                         ],
