@@ -28,18 +28,24 @@ final GoRouter appRouter = GoRouter(
   initialLocation: '/welcome',
   redirect: (BuildContext context, GoRouterState state) async {
     final user = FirebaseAuth.instance.currentUser;
-    final isOnAuthPage = state.matchedLocation.startsWith('/welcome') ||
-                        state.matchedLocation.startsWith('/login') ||
-                        state.matchedLocation.startsWith('/signup') ||
-                        state.matchedLocation.startsWith('/role-selection') ||
-                        state.matchedLocation.startsWith('/onboarding-complete');
 
-    // If user is not logged in, redirect to welcome
-    if (user == null && !isOnAuthPage) {
+    // Pages that require the user to be logged OUT
+    final isOnAuthPage = state.matchedLocation.startsWith('/welcome') ||
+                         state.matchedLocation.startsWith('/login') ||
+                         state.matchedLocation.startsWith('/signup') ||
+                         state.matchedLocation.startsWith('/role-selection');
+
+    // /onboarding-complete is intentionally excluded from the redirect:
+    // a newly registered user IS logged in but must still see this screen
+    // before being sent to their role-specific dashboard.
+    final isOnOnboarding = state.matchedLocation.startsWith('/onboarding-complete');
+
+    // If user is not logged in, redirect to welcome (except auth pages)
+    if (user == null && !isOnAuthPage && !isOnOnboarding) {
       return '/welcome';
     }
 
-    // If user is logged in but on auth page, redirect to home
+    // If user is logged in and on a pure-auth page (not onboarding), send home
     if (user != null && isOnAuthPage) {
       return '/home';
     }
@@ -161,16 +167,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<String?> _getUserRole() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return null;
-
-      final authService = AuthService();
-      final profile = await authService.getUserProfile(user.uid);
-      return profile.role;
-    } catch (_) {
-      return null;
-    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    final authService = AuthService();
+    final profile = await authService.getUserProfile(user.uid);
+    return profile.role;
   }
 
   @override
@@ -178,17 +179,65 @@ class _HomeScreenState extends State<HomeScreen> {
     return FutureBuilder<String?>(
       future: _userRoleFuture,
       builder: (context, snapshot) {
+        // Loading
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
+            backgroundColor: Color(0xFF0A0E1A),
             body: Center(
-              child: CircularProgressIndicator(),
+              child: CircularProgressIndicator(color: Colors.white),
             ),
           );
         }
 
-        final role = snapshot.data;
+        // Error or unauthenticated
+        if (snapshot.hasError || snapshot.data == null) {
+          return Scaffold(
+            backgroundColor: const Color(0xFF0A0E1A),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 64),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Could not load your profile.',
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Please check your connection and try again.',
+                      style: TextStyle(color: Colors.white54),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                      ),
+                      onPressed: () => setState(() {
+                        _userRoleFuture = _getUserRole();
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => context.go('/welcome'),
+                      child: const Text('Sign out and try again', style: TextStyle(color: Colors.white38)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
 
-        switch (role) {
+        switch (snapshot.data) {
           case 'patient':
             return const PatientHomeScreen();
           case 'paramedic':
@@ -196,6 +245,8 @@ class _HomeScreenState extends State<HomeScreen> {
           case 'dispatcher':
             return const DispatcherHomeScreen();
           default:
+            // Unknown role — sign out and return to welcome
+            FirebaseAuth.instance.signOut();
             return const RoleSelectionScreen();
         }
       },

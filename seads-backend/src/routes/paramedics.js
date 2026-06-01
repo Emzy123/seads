@@ -9,14 +9,79 @@ const validate     = require('../middleware/validate');
 const router = require('express').Router();
 
 // ─── GET /api/incidents ───────────────────────────────────────────────────────
-// Active incidents assigned to the paramedic's ambulance
+// Active incidents assigned to the paramedic's ambulance.
+// Strategy:
+//   1. First check if there are already active incidents linked to ANY ambulance
+//      where paramedic_id = this user. This handles the common case where the
+//      SOS was dispatched before the paramedic opened the app.
+//   2. If no incidents found that way, fall back to the auto-assign logic.
 router.get('/incidents', requireAuth, async (req, res, next) => {
   try {
-    // Find the ambulance this paramedic is assigned to
-    const ambulanceRes = await db.query(
-      "SELECT id FROM ambulances WHERE paramedic_id = $1 AND status != 'offline' LIMIT 1",
+    // ── Step 1: check incidents for any ambulance already tied to this paramedic ──
+    const directCheck = await db.query(
+      `SELECT i.*,
+              ST_X(i.location::GEOMETRY) AS lng,
+              ST_Y(i.location::GEOMETRY) AS lat,
+              u.name  AS patient_name,
+              u.phone AS patient_phone
+       FROM incidents i
+       JOIN ambulances a ON a.id = i.assigned_ambulance_id
+       JOIN users      u ON u.id = i.patient_id
+       WHERE a.paramedic_id = $1
+         AND i.status NOT IN ('resolved', 'cancelled')
+       ORDER BY i.created_at DESC`,
       [req.uid]
     );
+
+    if (directCheck.rows.length > 0) {
+      return res.json({ incidents: directCheck.rows });
+    }
+
+    // ── Step 2: find or auto-assign this paramedic to an ambulance ──
+    let ambulanceRes = await db.query(
+      "SELECT id FROM ambulances WHERE paramedic_id = $1 LIMIT 1",
+      [req.uid]
+    );
+
+    if (!ambulanceRes.rows.length) {
+      // Prefer a free ambulance that already has an on_mission status
+      // (it might have been dispatched but paramedic not yet linked).
+      const freeRes = await db.query(
+        `SELECT id, status FROM ambulances WHERE paramedic_id IS NULL
+         ORDER BY CASE WHEN status = 'on_mission' THEN 0 ELSE 1 END, updated_at DESC
+         LIMIT 1`
+      );
+
+      if (freeRes.rows.length) {
+        const ambId     = freeRes.rows[0].id;
+        const ambStatus = freeRes.rows[0].status;
+        // Preserve on_mission status so the incident remains visible
+        const keepStatus = ambStatus === 'on_mission' ? 'on_mission' : 'available';
+        await db.query(
+          'UPDATE ambulances SET paramedic_id = $1, status = $2, updated_at = NOW() WHERE id = $3',
+          [req.uid, keepStatus, ambId]
+        );
+        console.log(`[SEADS] Auto-assigned paramedic ${req.uid} to ambulance ${ambId} (status: ${keepStatus})`);
+      } else {
+        // Create a placeholder ambulance for this paramedic
+        const newAmbId   = `amb-auto-${req.uid.slice(0, 8)}`;
+        const newAmbName = `SEADS-AUTO-${req.uid.slice(0, 4).toUpperCase()}`;
+        await db.query(
+          `INSERT INTO ambulances (id, name, status, paramedic_id, location)
+           VALUES ($1, $2, 'available', $3, ST_SetSRID(ST_MakePoint(-0.1278, 51.5074), 4326)::GEOGRAPHY)
+           ON CONFLICT (id) DO UPDATE
+             SET paramedic_id = EXCLUDED.paramedic_id,
+                 status       = CASE WHEN ambulances.status = 'on_mission' THEN 'on_mission' ELSE 'available' END`,
+          [newAmbId, newAmbName, req.uid]
+        );
+        console.log(`[SEADS] Created/linked ambulance ${newAmbName} for paramedic ${req.uid}`);
+      }
+
+      ambulanceRes = await db.query(
+        "SELECT id FROM ambulances WHERE paramedic_id = $1 LIMIT 1",
+        [req.uid]
+      );
+    }
 
     if (!ambulanceRes.rows.length) {
       return res.json({ incidents: [] });
@@ -28,7 +93,8 @@ router.get('/incidents', requireAuth, async (req, res, next) => {
       `SELECT i.*,
               ST_X(i.location::GEOMETRY) AS lng,
               ST_Y(i.location::GEOMETRY) AS lat,
-              u.name AS patient_name, u.phone AS patient_phone
+              u.name  AS patient_name,
+              u.phone AS patient_phone
        FROM incidents i
        JOIN users u ON u.id = i.patient_id
        WHERE i.assigned_ambulance_id = $1
