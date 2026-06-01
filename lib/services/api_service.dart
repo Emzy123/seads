@@ -163,7 +163,12 @@ class ApiService {
     _ensureOk(response);
   }
 
+  /// Paramedic: returns only incidents assigned to the calling paramedic's ambulance.
   Future<List<dynamic>> getAssignments() => _getList('/api/incidents', 'incidents');
+
+  /// Dispatcher: returns ALL active incidents (optionally filtered).
+  Future<List<dynamic>> getDispatcherIncidents({Map<String, dynamic>? filters}) =>
+      _getList('/api/dispatchers/incidents', 'incidents', query: _stringifyQuery(filters));
 
   Future<List<dynamic>> getAllAmbulances() => _getList('/api/ambulances', 'ambulances');
 

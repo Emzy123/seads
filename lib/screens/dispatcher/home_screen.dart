@@ -109,21 +109,15 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
     await _refreshPendingCount();
     try {
       final futures = await Future.wait([
-        _apiService.getAssignments(),
+        _apiService.getDispatcherIncidents(),
         _apiService.getAllAmbulances(),
       ]);
 
       if (mounted) {
-        final incidents = DemoData.orEmpty(
-          List<dynamic>.from(futures[0]),
-          DemoData.mockIncidents,
-        );
+        final incidents = List<dynamic>.from(futures[0]);
         setState(() {
           _incidents = incidents;
-          _ambulances = DemoData.orEmpty(
-            List<dynamic>.from(futures[1]),
-            DemoData.mockAmbulances,
-          );
+          _ambulances = List<dynamic>.from(futures[1]);
           _onSceneCount = incidents
               .where((i) {
                 final s = i['status']?.toString() ?? '';
