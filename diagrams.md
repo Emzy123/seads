@@ -8,7 +8,7 @@ These diagrams can be rendered in Markdown viewers, GitHub, or pasted into the [
 
 ## 📘 Chapter 3: Methodology and System Architecture
 
-This chapter focuses on the design methodology, high-level framework, database architecture, and spatial querying algorithms used by the SEADS ecosystem.
+This chapter focuses on the design methodology, high-level framework, database architecture, and UML specifications used by the SEADS ecosystem.
 
 ### 1. High-Level System Architecture
 This flowchart represents the multi-tier architectural layout of the SEADS platform, showing how the client layers (Patient, Paramedic, and Dispatcher) interface with the security gateways, PostGIS-enabled database, and cloud services (Firebase Auth/FCM).
@@ -53,7 +53,131 @@ flowchart TD
 
 ---
 
-### 2. Database Entity Relationship Diagram (ERD)
+### 2. Use Case Diagram
+This UML Use Case Diagram represents the interaction between actors (Patient, Paramedic, and Dispatcher) and the system boundary's core operations.
+
+```mermaid
+flowchart LR
+    subgraph System ["SEADS Core Boundary"]
+        UC1((Request SOS Emergency))
+        UC2((Track Live Ambulance))
+        UC3((Manage Medical Profile))
+        UC4((Update Incident Status))
+        UC5((Navigate to Patient))
+        UC6((Perform Equipment Check))
+        UC7((Manage Shifts))
+        UC8((Swap Shifts))
+        UC9((Monitor Fleet & Analytics))
+        UC10((Manually Assign Units))
+    end
+
+    Patient([Patient Actor]) --- UC1
+    Patient --- UC2
+    Patient --- UC3
+
+    Paramedic([Paramedic Actor]) --- UC4
+    Paramedic --- UC5
+    Paramedic --- UC6
+    Paramedic --- UC7
+    Paramedic --- UC8
+
+    Dispatcher([Dispatcher Actor]) --- UC9
+    Dispatcher --- UC10
+    Dispatcher --- UC8
+```
+
+* **Thesis Context**: Place this under the **System Functional Requirements** or **Use Case Analysis** section. It highlights the boundary actions partitioned by specific roles.
+
+---
+
+### 3. System Class Diagram
+This UML Class Diagram describes the domain data models and service structures within the client-side system architecture.
+
+```mermaid
+classDiagram
+    class User {
+        +String id
+        +String email
+        +String name
+        +String phone
+        +String role
+        +String fcmToken
+        +DateTime createdAt
+        +DateTime updatedAt
+        +isParamedic() bool
+        +isDispatcher() bool
+    }
+
+    class Ambulance {
+        +String id
+        +String name
+        +String status
+        +LatLng location
+        +String paramedicId
+        +DateTime createdAt
+        +DateTime updatedAt
+    }
+
+    class Incident {
+        +String id
+        +String patientId
+        +String status
+        +LatLng location
+        +String emergencyType
+        +String description
+        +String assignedAmbulanceId
+        +DateTime createdAt
+        +DateTime updatedAt
+        +isPending() bool
+        +isResolved() bool
+    }
+
+    class Shift {
+        +String id
+        +String paramedicId
+        +String ambulanceId
+        +String type
+        +DateTime startTime
+        +DateTime endTime
+        +String status
+        +String partnerName
+        +DateTime createdAt
+    }
+
+    class ShiftSwapRequest {
+        +String id
+        +String shiftId
+        +String requesterId
+        +String message
+        +String status
+        +DateTime createdAt
+    }
+
+    class ApiService {
+        -String baseUrl
+        -String authToken
+        +getActiveIncident() Future~Incident~
+        +getShiftSwapRequests() Future~List~ShiftSwapRequest~~
+        +acceptShiftSwap(String requestId, String yourShiftId) Future~bool~
+        +declineShiftSwap(String requestId) Future~bool~
+        +updateShiftStatus(String shiftId, String status) Future~bool~
+        +updateAmbulanceLocation(double lat, double lng) Future~bool~
+    }
+
+    User "1" --o "0..*" Shift : works
+    User "1" --o "0..*" Incident : reports
+    Ambulance "1" --o "0..*" Incident : assigned_to
+    Ambulance "1" --o "0..*" Shift : linked_to
+    Shift "1" --o "0..*" ShiftSwapRequest : referenced_by
+    ApiService ..> Incident : fetches/updates
+    ApiService ..> ShiftSwapRequest : manages
+```
+
+* **Thesis Context**: Place this under the **Object-Oriented Design** or **Class Modeling** section in Chapter 3.
+
+---
+
+### 4. Database Entity Relationship Diagram (ERD)
 The database structure details the PostgreSQL relational schema, including PostGIS `GEOGRAPHY(POINT, 4326)` columns, constraints, and field relationships.
 
 ```mermaid
