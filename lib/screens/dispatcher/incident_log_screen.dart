@@ -22,8 +22,7 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
   bool _isLoading = true;
   String _filterStatus = 'all';
   String _filterType = 'all';
-  DateTime? _startDate;
-  DateTime? _endDate;
+
 
   @override
   void initState() {

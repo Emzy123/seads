@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyD_78UOu-P99ak-mGysBHXMyCK2w-FQlMU',
-    appId: '1:878840517533:android:6b42696576558e2cbad574',
+    appId: '1:878840517533:android:510551a07d635f31bad574',
     messagingSenderId: '878840517533',
     projectId: 'seads-ambulance',
     databaseURL: 'https://seads-ambulance-default-rtdb.firebaseio.com',

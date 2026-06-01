@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import '../config.dart';

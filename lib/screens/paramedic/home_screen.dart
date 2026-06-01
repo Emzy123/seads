@@ -1,25 +1,25 @@
 import 'dart:async';
 import 'dart:ui' as ui;
-import 'dart:math' show Random;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
+
 import 'package:geolocator/geolocator.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
-import '../../providers/auth_provider.dart';
+
 import '../../services/location_service.dart';
 import '../../services/api_service.dart';
 import '../../config.dart';
 import '../../core/breakpoints.dart';
 import '../../core/demo_data.dart';
 import '../../core/equipment_helpers.dart';
-import '../../core/api_exception.dart';
+
 import '../../theme/app_theme.dart';
 import '../../core/offline_queue.dart';
 import '../../widgets/app_drawer.dart';
@@ -27,6 +27,7 @@ import '../../widgets/status_badge.dart';
 import '../../widgets/sync_status_banner.dart';
 import '../../services/background_location_service.dart';
 import '../../services/realtime_sync_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ParamedicHomeScreen extends ConsumerStatefulWidget {
   const ParamedicHomeScreen({super.key});
@@ -46,7 +47,7 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
   int _pendingSyncCount = 0;
   
   List<dynamic> _assignments = [];
-  bool _isLoading = true;
+
   int _currentTab = 0;
   
   // Status management
@@ -157,7 +158,6 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
 
   Future<void> _fetchAssignments() async {
     await _refreshPendingCount();
-    setState(() => _isLoading = true);
     try {
       final assignments = await _apiService.getAssignments();
       if (mounted) {
@@ -178,10 +178,6 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
           ),
           );
         }
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -430,9 +426,9 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
               urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
               subdomains: const ['a', 'b', 'c', 'd'],
             ),
-            if (_currentPosition != null)
-              MarkerLayer(
-                markers: [
+            MarkerLayer(
+              markers: [
+                if (_currentPosition != null)
                   Marker(
                     point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
                     width: 80,
@@ -450,8 +446,31 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
                       ),
                     ),
                   ),
-                ],
-              ),
+                if (activeAssignment != null &&
+                    activeAssignment['lat'] != null &&
+                    activeAssignment['lng'] != null)
+                  Marker(
+                    point: LatLng(
+                      (activeAssignment['lat'] as num).toDouble(),
+                      (activeAssignment['lng'] as num).toDouble(),
+                    ),
+                    width: 80,
+                    height: 80,
+                    child: Semantics(
+                      label: 'Patient location',
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppTheme.criticalRed.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.person_pin_circle, color: AppTheme.criticalRed, size: 35)
+                            .animate(onPlay: (c) => c.repeat(reverse: true))
+                            .scale(begin: const Offset(0.8, 0.8), end: const Offset(1.2, 1.2), duration: 1.seconds),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         );
 
@@ -618,7 +637,28 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
-                      onPressed: () {},
+                      onPressed: () async {
+                        final lat = incident['lat'];
+                        final lng = incident['lng'];
+                        if (lat != null && lng != null) {
+                          final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Could not launch navigation maps')),
+                              );
+                            }
+                          }
+                        } else {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Patient location coordinates not available')),
+                            );
+                          }
+                        }
+                      },
                       icon: const Icon(Icons.navigation),
                       label: const Text('Navigate'),
                       style: ElevatedButton.styleFrom(

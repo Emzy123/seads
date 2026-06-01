@@ -46,8 +46,15 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>SEADS needs your location to dispatch the nearest ambulance to your current position.</string>
+	<string>SEADS needs access to your location to dispatch the nearest ambulance and show you the ambulance approaching in real time.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>SEADS needs your location to track incidents and dispatch the nearest ambulance.</string>
+	<string>SEADS needs background location access to share your location with paramedics during an active emergency incident.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SEADS needs access to your location both in the foreground and background to navigate paramedics and update patients in real time.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

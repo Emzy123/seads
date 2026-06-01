@@ -1,12 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
+
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../config.dart';
-import '../../core/api_exception.dart';
-import '../../core/demo_data.dart';
+
 import '../../core/shift_models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_drawer.dart';
@@ -54,6 +53,26 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
         final key = DateTime(shift.start.year, shift.start.month, shift.start.day);
         _shifts.putIfAbsent(key, () => []).add(shift);
       }
+
+      // Fetch pending shift swap requests
+      final rawSwaps = await _apiService.getShiftSwapRequests();
+      _swapRequests.clear();
+      for (final item in rawSwaps) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item);
+        final start = DateTime.tryParse(map['requester_shift_start']?.toString() ?? '') ?? DateTime.now();
+        final type = map['requester_shift_type']?.toString() ?? 'Shift';
+        _swapRequests.add(
+          ShiftSwapRequest(
+            id: map['id']?.toString() ?? '',
+            requesterName: map['requester_name']?.toString() ?? 'Unknown',
+            requesterShift: '${DateFormat('MMM dd').format(start)} - $type',
+            yourShift: 'Select one of your shifts',
+            status: map['status']?.toString() ?? 'pending',
+          ),
+        );
+      }
+
       setState(() => _isLoading = false);
     } catch (e) {
       if (!mounted) return;
@@ -349,9 +368,9 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(
+               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () => _clockOut(activeShift),
                   icon: const Icon(Icons.logout, size: 18),
                   label: const Text('Clock Out'),
                   style: ElevatedButton.styleFrom(
@@ -700,7 +719,7 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: () => _acceptSwapRequest(request),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.greenAccent,
                       foregroundColor: Colors.black,
@@ -711,7 +730,7 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () {},
+                    onPressed: () => _declineSwapRequest(request),
                     style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
                     child: const Text('Decline'),
                   ),
@@ -746,6 +765,150 @@ class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
             backgroundColor: Colors.redAccent,
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _clockOut(Shift shift) async {
+    if (shift.id.isEmpty) return;
+    try {
+      setState(() => _isLoading = true);
+      await _apiService.updateShiftStatus(shiftId: shift.id, status: 'completed');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Shift completed. Clocked out successfully.')),
+        );
+      }
+      await _fetchShifts();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ApiService.wrapError(e).userMessage),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _acceptSwapRequest(ShiftSwapRequest request) {
+    final myUpcomingShifts = _shifts.values
+        .expand((s) => s)
+        .where((s) => s.status == 'scheduled' && s.id.isNotEmpty)
+        .toList();
+
+    if (myUpcomingShifts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have no upcoming scheduled shifts to swap.')),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.95),
+              border: const Border(top: BorderSide(color: Colors.greenAccent)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select Shift to Swap',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Select which of your shifts you want to trade for ${request.requesterName}\'s shift (${request.requesterShift}).',
+                  style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+                ),
+                const SizedBox(height: 20),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.4,
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: myUpcomingShifts.length,
+                    itemBuilder: (context, idx) {
+                      final s = myUpcomingShifts[idx];
+                      final dateStr = DateFormat('MMM dd, yyyy').format(s.start);
+                      return Card(
+                        color: Colors.white.withOpacity(0.05),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          title: Text(s.type, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          subtitle: Text('$dateStr (${DateFormat('h:mm a').format(s.start)} - ${DateFormat('h:mm a').format(s.end)})', style: const TextStyle(color: Colors.white70)),
+                          trailing: const Icon(Icons.swap_horiz, color: Colors.greenAccent),
+                          onTap: () async {
+                            Navigator.pop(context); // Close bottom sheet
+                            try {
+                              setState(() => _isLoading = true);
+                              await _apiService.acceptShiftSwap(
+                                requestId: request.id,
+                                yourShiftId: s.id,
+                              );
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Shift swap accepted and updated!')),
+                                );
+                              }
+                              await _fetchShifts();
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(ApiService.wrapError(e).userMessage),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                                setState(() => _isLoading = false);
+                              }
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _declineSwapRequest(ShiftSwapRequest request) async {
+    try {
+      setState(() => _isLoading = true);
+      await _apiService.declineShiftSwap(request.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Swap request declined')),
+        );
+      }
+      await _fetchShifts();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ApiService.wrapError(e).userMessage),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        setState(() => _isLoading = false);
       }
     }
   }

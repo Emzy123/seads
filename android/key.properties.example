@@ -1,0 +1,16 @@
+# SEADS Android Keystore Properties Template
+# Copy this file to `android/key.properties` and fill in the values below.
+# DO NOT commit `android/key.properties` to version control (it is ignored in .gitignore).
+
+# The password for the keystore
+storePassword=your_keystore_password
+
+# The password for the key itself
+keyPassword=your_key_password
+
+# The alias of the key inside the keystore (e.g. upload or release)
+keyAlias=your_key_alias
+
+# The relative path to the keystore file (e.g. my-release-key.jks or keystore.p12)
+# Make sure the file exists under `android/app/` or specify the correct absolute/relative path.
+storeFile=app/my-release-key.jks

@@ -1,5 +1,5 @@
 import 'dart:ui';
-import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
@@ -546,7 +546,7 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
         border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
       ),
       child: Column(
-        children: (types as List).map((type) {
+        children: types.map((type) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Column(
@@ -586,7 +586,7 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
         border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
       ),
       child: Row(
-        children: (priorities as List).map((p) {
+        children: priorities.map((p) {
           final color = Color(p['color']);
           final percentage = p['count'] / priorities.fold(0, (sum, p) => sum + (p['count'] as int));
           return Expanded(
@@ -622,7 +622,7 @@ class _ReportsAnalyticsScreenState extends ConsumerState<ReportsAnalyticsScreen>
   }
 
   Widget _buildHourlyChart(List hours) {
-    final maxCount = (hours as List).map((h) => h['count'] as int).reduce((a, b) => a > b ? a : b);
+    final maxCount = hours.map((h) => h['count'] as int).reduce((a, b) => a > b ? a : b);
     
     return Container(
       padding: const EdgeInsets.all(20),

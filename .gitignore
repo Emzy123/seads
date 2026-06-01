@@ -47,3 +47,8 @@ app.*.map.json
 # Backend — Node.js
 seads-backend/node_modules/
 seads-backend/.env
+
+# Android Keystore & Properties
+/android/key.properties
+*.jks
+*.keystore

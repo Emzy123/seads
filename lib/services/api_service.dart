@@ -33,13 +33,6 @@ class ApiService {
 
   static bool _statusOk(int? code) => code != null && code >= 200 && code < 300;
 
-  static String _errorMessage(dynamic data) {
-    if (data is Map) {
-      final err = data['error'] ?? data['message'] ?? data['detail'];
-      if (err != null) return err.toString();
-    }
-    return 'Request failed';
-  }
 
   static List<dynamic> _decodeList(dynamic data, String key) {
     if (data == null) return [];
@@ -348,7 +341,61 @@ class ApiService {
     _ensureOk(response);
   }
 
-  /// Maps API errors (including Dio network failures) to [ApiException].
+  Future<Map<String, dynamic>> getActiveIncident() async {
+    final token = await _requireToken();
+    try {
+      final response = await dio.get(
+        '/api/patients/active-incident',
+        options: _authOptions(token),
+      );
+      if (response.statusCode == 404) return {};
+      _ensureOk(response);
+      return _decodeMapEnvelope(response.data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return {};
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getShiftSwapRequests() async {
+    return _getList('/api/paramedics/shifts/swap-requests', 'swap_requests');
+  }
+
+  Future<void> acceptShiftSwap({
+    required String requestId,
+    required String yourShiftId,
+  }) async {
+    final token = await _requireToken();
+    final response = await dio.post(
+      '/api/paramedics/shifts/swap-requests/$requestId/accept',
+      data: {'your_shift_id': yourShiftId},
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
+  Future<void> declineShiftSwap(String requestId) async {
+    final token = await _requireToken();
+    final response = await dio.post(
+      '/api/paramedics/shifts/swap-requests/$requestId/decline',
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
+  Future<void> updateShiftStatus({
+    required String shiftId,
+    required String status,
+  }) async {
+    final token = await _requireToken();
+    final response = await dio.put(
+      '/api/paramedics/shifts/$shiftId/status',
+      data: {'status': status},
+      options: _authOptions(token),
+    );
+    _ensureOk(response);
+  }
+
   static ApiException wrapError(Object error) {
     if (error is ApiException) return error;
     if (error is DioException) {

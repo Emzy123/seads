@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
+
 import 'package:geolocator/geolocator.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/offline_queue.dart';
@@ -17,6 +17,7 @@ import '../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/seads_buttons.dart';
+import '../../services/realtime_sync_service.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -35,8 +36,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
   final MapController _mapController = MapController();
   StreamSubscription? _notificationSubscription;
   Timer? _holdTimer;
-  bool _showConfirmation = false;
+
   String _ambulanceStatus = 'none'; // none, dispatched, arriving, arrived
+  final RealtimeSyncService _realtime = RealtimeSyncService();
+  LatLng? _ambulancePosition;
+  String _ambulanceName = 'AMB-201';
 
   // Medical snapshot data
   Map<String, dynamic> _medicalSnapshot = {
@@ -52,13 +56,52 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
     _initializeLocation();
     _listenForNotifications();
     _loadMedicalSnapshot();
+    _realtime.start(_pollActiveIncident);
   }
 
   @override
   void dispose() {
     _notificationSubscription?.cancel();
     _holdTimer?.cancel();
+    _realtime.dispose();
     super.dispose();
+  }
+
+  Future<void> _pollActiveIncident() async {
+    try {
+      final data = await _apiService.getActiveIncident();
+      if (!mounted) return;
+      if (data.isEmpty || data['incident'] == null) {
+        setState(() {
+          _ambulanceStatus = 'none';
+          _ambulancePosition = null;
+        });
+        _realtime.reportSuccess();
+        return;
+      }
+
+      final incident = Map<String, dynamic>.from(data['incident'] as Map);
+      final status = incident['status']?.toString() ?? 'none';
+      
+      final ambName = incident['ambulance_name']?.toString() ?? 'AMB-201';
+      final ambLat = incident['ambulance_lat'];
+      final ambLng = incident['ambulance_lng'];
+
+      setState(() {
+        _ambulanceStatus = (status == 'pending' || status == 'dispatched') 
+            ? 'dispatched' 
+            : (status == 'en_route' ? 'arriving' : (status == 'on_scene' ? 'arrived' : 'none'));
+        _ambulanceName = ambName;
+        if (ambLat != null && ambLng != null) {
+          _ambulancePosition = LatLng((ambLat as num).toDouble(), (ambLng as num).toDouble());
+        } else {
+          _ambulancePosition = null;
+        }
+      });
+      _realtime.reportSuccess();
+    } catch (_) {
+      _realtime.reportFailure();
+    }
   }
 
 
@@ -181,7 +224,6 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
     _holdTimer?.cancel();
     setState(() {
       _isHolding = false;
-      _showConfirmation = true;
     });
     AppTheme.hapticSuccess();
     _showSOSConfirmation();
@@ -232,7 +274,6 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
                       child: OutlinedButton(
                         onPressed: () {
                           Navigator.pop(context);
-                          setState(() => _showConfirmation = false);
                         },
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -561,7 +602,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
                 children: [
                   Text(statusText, style: AppTheme.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
-                  Text('ETA: 4 minutes • Unit: AMB-201', style: AppTheme.bodySmall),
+                  Text('ETA: 4 minutes • Unit: $_ambulanceName', style: AppTheme.bodySmall),
                 ],
               ),
             ),
@@ -623,9 +664,9 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
                   urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
                   subdomains: const ['a', 'b', 'c', 'd'],
                 ),
-                if (_currentPosition != null)
-                  MarkerLayer(
-                    markers: [
+                MarkerLayer(
+                  markers: [
+                    if (_currentPosition != null)
                       Marker(
                         point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
                         width: 80,
@@ -644,8 +685,26 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen>
                            .fade(end: 0),
                         ),
                       ),
-                    ],
-                  ),
+                    if (_ambulancePosition != null)
+                      Marker(
+                        point: _ambulancePosition!,
+                        width: 80,
+                        height: 80,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.greenAccent.withOpacity(0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.local_shipping,
+                            color: Colors.greenAccent,
+                            size: 30,
+                          ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+                           .scale(begin: const Offset(0.8, 0.8), end: const Offset(1.2, 1.2), duration: 1.seconds),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
 

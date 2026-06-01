@@ -7,6 +7,16 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "postgis";
 
+-- Clean up existing legacy tables to ensure a clean schema recreation
+DROP TABLE IF EXISTS shift_swap_requests CASCADE;
+DROP TABLE IF EXISTS shifts CASCADE;
+DROP TABLE IF EXISTS equipment_items CASCADE;
+DROP TABLE IF EXISTS medical_profiles CASCADE;
+DROP TABLE IF EXISTS emergency_contacts CASCADE;
+DROP TABLE IF EXISTS incidents CASCADE;
+DROP TABLE IF EXISTS ambulances CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
 -- ─── Users ───────────────────────────────────────────────────
 -- id = firebase_uid (TEXT, set by the app on register)
 CREATE TABLE IF NOT EXISTS users (

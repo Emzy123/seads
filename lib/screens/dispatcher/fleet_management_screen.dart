@@ -1,9 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
+
 import '../../config.dart';
 import '../../core/demo_data.dart';
 import '../../theme/app_theme.dart';
@@ -24,8 +22,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
   bool _isLoading = true;
   String? _error;
   String _filterStatus = 'all';
-  dynamic _selectedAmbulance;
-  final MapController _mapController = MapController();
+
 
   @override
   void initState() {
