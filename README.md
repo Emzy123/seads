@@ -8,13 +8,13 @@ A Flutter + Node.js platform that connects **patients**, **paramedics**, and **d
 
 | Layer | Technology |
 |---|---|
-| Mobile | Flutter (Dart), Riverpod, GoRouter |
+| Mobile | Flutter (Dart), Riverpod, GoRouter (Focus: Android Only) |
 | Auth | Firebase Authentication (email/password) |
-| Backend | Node.js 20 + Express 5 — `seads-backend/` |
+| Backend | Node.js 24 + Express 5 — `seads-backend/` (Live on Render) |
 | Database | Supabase (PostgreSQL + PostGIS) |
 | Real-time | Supabase Realtime + adaptive polling |
 | Push | Firebase Cloud Messaging (FCM) |
-| Hosting | Render (backend web service) |
+| Hosting | Render (backend web service via standard Blueprints) |
 
 The backend lives **inside this repo** at `seads-backend/` and is deployed to Render via `render.yaml`.
 
@@ -34,12 +34,14 @@ The backend lives **inside this repo** at `seads-backend/` and is deployed to Re
 seads/
 ├── render.yaml                    # Render deployment config (points to seads-backend/)
 ├── supabase-migration.sql         # Full DB schema — run once in Supabase SQL Editor
+├── diagrams.md                    # Thesis diagrams (Mermaid code for Chapters 3 and 4)
 ├── scripts/
 │   └── dev.sh                     # Local dev launcher
 ├── lib/
 │   ├── main.dart                  # App entry point (Firebase init + Riverpod)
 │   ├── router.dart                # GoRouter with auth guard + role-based routing
 │   ├── config.dart                # Backend URL config (BACKEND_URL dart-define)
+│   ├── firebase_options.dart      # Platform-specific Firebase settings (Sync'd for com.seads.ambulance)
 │   ├── providers/
 │   │   └── auth_provider.dart     # Riverpod auth state + user role providers
 │   ├── services/
@@ -55,6 +57,7 @@ seads/
     ├── index.js                   # Express 5 server entry point
     ├── package.json
     ├── .env.example               # Environment variable template
+    ├── .env                       # Local environment variables
     └── src/
         ├── config/
         │   ├── db.js              # pg.Pool → Supabase PostgreSQL
@@ -90,59 +93,77 @@ Run the migration **once** in your Supabase project:
 
 > Supabase Dashboard → SQL Editor → paste `supabase-migration.sql` → Run
 
-This creates all tables (`users`, `ambulances`, `incidents`, `emergency_contacts`, `medical_profiles`, `equipment_items`, `shifts`, `shift_swap_requests`) with PostGIS geography columns and indexes.
+*Note: The migration script includes a clean-slate safety block (`DROP TABLE ... CASCADE`) to drop any legacy partial tables from previous manual runs, guaranteeing constraints and columns like `assigned_ambulance_id` are created properly.*
 
 ### 2 — Backend Setup (local dev)
 
+Copy the environment variable example file to `.env`:
 ```bash
 cp seads-backend/.env.example seads-backend/.env
-# Fill in DATABASE_URL and FIREBASE_SERVICE_ACCOUNT_BASE64
+```
+
+Open `seads-backend/.env` and configure your credentials:
+- **`DATABASE_URL`**: Your Supabase direct connection string (e.g. `postgresql://postgres.rbonuckrbifxbwvlqcpd:<password>@aws-0-eu-west-1.pooler.supabase.com:6543/postgres`).
+- **`FIREBASE_SERVICE_ACCOUNT_BASE64`**: The Base64 string of your Firebase service account JSON key:
+  ```bash
+  base64 -i serviceAccountKey.json | tr -d '\n'
+  ```
+
+Start the local server:
+```bash
 bash scripts/dev.sh
 ```
 
-Get your Supabase `DATABASE_URL` from:
-> Supabase Dashboard → Settings → Database → Connection string → URI (Session mode, port 5432)
-
-Generate `FIREBASE_SERVICE_ACCOUNT_BASE64`:
-```bash
-base64 -i serviceAccountKey.json | tr -d '\n'
-```
-
-Seed demo ambulances + equipment:
+Seed default ambulances + medical equipment:
 ```bash
 cd seads-backend && npm run seed
 ```
 
-### 3 — Flutter Setup
+### 3 — Flutter Setup (Android Focus)
 
-```bash
-flutter pub get
+1. **Android App Identifiers**:
+   Ensure `android/app/build.gradle` has the matching `applicationId = "com.seads.ambulance"` registered in your Firebase Console. Platform configurations in `lib/firebase_options.dart` are synced to use the `com.seads.ambulance` credentials.
 
-# Android emulator (default — no dart-define needed)
-flutter run
+2. **Android Release Keystores**:
+   To secure release signing credentials:
+   - Copy `android/key.properties.example` to `android/key.properties` (this file is ignored in `.gitignore`).
+   - Populate it with your keystore alias, keystore path, and passwords.
+   - If missing, the build gracefully falls back to debug signing configurations so local emulators run cleanly.
 
-# Physical device (replace with your machine's LAN IP)
-flutter run --dart-define=BACKEND_URL=http://192.168.1.x:3000
-
-# Against deployed Render backend
-flutter run --dart-define=BACKEND_URL=https://seads-backend.onrender.com
-```
+3. **Running the App**:
+   ```bash
+   flutter pub get
+   
+   # Android emulator (default — no dart-define needed)
+   flutter run
+   
+   # Physical device (replace with your machine's LAN IP)
+   flutter run --dart-define=BACKEND_URL=http://192.168.1.x:3000
+   
+   # Against deployed live Render backend
+   flutter run --dart-define=BACKEND_URL=https://seads-backend.onrender.com
+   ```
 
 ---
 
 ## Deploying to Render
 
-1. Push this repo to GitHub.
-2. In the [Render dashboard](https://dashboard.render.com), create a **New Web Service** → connect your repo.
-3. Render will auto-detect `render.yaml` — confirm the service settings.
-4. Set the following **Environment Variables** in the Render dashboard:
-   - `DATABASE_URL` — Supabase PostgreSQL URI
-   - `FIREBASE_SERVICE_ACCOUNT_BASE64` — base64 service account JSON
-   - `ALLOWED_ORIGIN` — your app's origin or `*`
-5. Deploy — Render will run `npm install && npm start` from `seads-backend/`.
-6. Build your Flutter APK/IPA with:
+1. **GitHub Setup**:
+   Ensure all files are pushed to your remote repository:
    ```bash
-   flutter build apk --dart-define=BACKEND_URL=https://<your-service>.onrender.com
+   git push origin main
+   ```
+2. **Render Setup**:
+   In the [Render dashboard](https://dashboard.render.com), create a **New Blueprint** project and link this repository. Render automatically reads `render.yaml` and provisions your Web Service.
+3. **Environment Secrets**:
+   Provide the following variables when prompted:
+   - `DATABASE_URL` — Supabase PostgreSQL connection string.
+   - `FIREBASE_SERVICE_ACCOUNT_BASE64` — Base64-encoded Firebase service account JSON.
+   - `ALLOWED_ORIGIN` — `*` or your custom domain.
+4. **Compile Production App**:
+   Compile the optimized release APK targeting your live backend URL:
+   ```bash
+   flutter build apk --release --dart-define=BACKEND_URL=https://seads-backend.onrender.com
    ```
 
 ---
