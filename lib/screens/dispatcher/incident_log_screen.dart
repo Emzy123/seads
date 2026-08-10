@@ -396,8 +396,9 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
   }
 
   void _showIncidentDetails(dynamic incident) {
-    final status = incident['status'] as String;
+    final status = (incident['status'] ?? 'pending').toString();
     final statusColor = _getStatusColor(status);
+    final emergencyType = (incident['emergency_type'] ?? 'Emergency').toString();
 
     showModalBottomSheet(
       context: context,
@@ -438,7 +439,7 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
                           color: statusColor.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(_getEmergencyIcon(incident['emergency_type']), color: statusColor, size: 32),
+                        child: Icon(_getEmergencyIcon(emergencyType), color: statusColor, size: 32),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -446,7 +447,7 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              incident['emergency_type'],
+                              emergencyType,
                               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                             ),
                             const SizedBox(height: 4),
@@ -471,28 +472,28 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
                   
                   // Incident ID & Priority
                   _buildDetailSection('Incident Information', [
-                    {'label': 'Incident ID', 'value': incident['id']},
-                    {'label': 'Priority', 'value': (incident['priority'] as String).toUpperCase()},
-                    {'label': 'Created', 'value': DateFormat('MMM dd, yyyy HH:mm').format(DateTime.parse(incident['created_at']))},
+                    {'label': 'Incident ID', 'value': (incident['id'] ?? 'N/A').toString()},
+                    {'label': 'Priority', 'value': (incident['priority']?.toString() ?? 'medium').toUpperCase()},
+                    {'label': 'Created', 'value': incident['created_at'] != null ? DateFormat('MMM dd, yyyy HH:mm').format(DateTime.tryParse(incident['created_at'].toString()) ?? DateTime.now()) : 'N/A'},
                     if (incident['completed_at'] != null)
-                      {'label': 'Completed', 'value': DateFormat('MMM dd, yyyy HH:mm').format(DateTime.parse(incident['completed_at']))},
+                      {'label': 'Completed', 'value': DateFormat('MMM dd, yyyy HH:mm').format(DateTime.tryParse(incident['completed_at'].toString()) ?? DateTime.now())},
                   ]),
                   
                   const SizedBox(height: 20),
                   
                   // Patient Info
                   _buildDetailSection('Patient Information', [
-                    {'label': 'Name', 'value': incident['patient_name'] ?? 'Unknown'},
-                    {'label': 'Location', 'value': incident['location'] ?? 'Unknown'},
-                    {'label': 'Hospital', 'value': incident['hospital'] ?? 'Not specified'},
+                    {'label': 'Name', 'value': (incident['patient_name'] ?? incident['patient']?['name'] ?? 'Unknown').toString()},
+                    {'label': 'Location', 'value': (incident['location'] ?? incident['address'] ?? 'Unknown').toString()},
+                    {'label': 'Hospital', 'value': (incident['hospital'] ?? 'Not specified').toString()},
                   ]),
                   
                   const SizedBox(height: 20),
                   
                   // Response Team
                   _buildDetailSection('Response Team', [
-                    {'label': 'Paramedic', 'value': incident['paramedic'] ?? 'Unassigned'},
-                    {'label': 'Ambulance', 'value': incident['ambulance'] ?? 'Not assigned'},
+                    {'label': 'Paramedic', 'value': (incident['paramedic'] ?? incident['paramedic_name'] ?? 'Unassigned').toString()},
+                    {'label': 'Ambulance', 'value': (incident['ambulance'] ?? incident['ambulance_id'] ?? 'Not assigned').toString()},
                   ]),
                   
                   const SizedBox(height: 24),
@@ -537,7 +538,7 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
     );
   }
 
-  Widget _buildDetailSection(String title, List<Map<String, String>> items) {
+  Widget _buildDetailSection(String title, List<Map<String, String?>> items) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -559,11 +560,11 @@ class _IncidentLogScreenState extends ConsumerState<IncidentLogScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    item['label']!,
+                    item['label'] ?? '',
                     style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6)),
                   ),
                   Text(
-                    item['value']!,
+                    item['value'] ?? 'N/A',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ],

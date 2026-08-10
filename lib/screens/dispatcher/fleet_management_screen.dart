@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
 import '../../core/demo_data.dart';
@@ -247,7 +248,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
   }
 
   Widget _buildAmbulanceCard(dynamic ambulance) {
-    final status = ambulance['status'] as String;
+    final status = (ambulance['status'] ?? 'available').toString();
     final statusColor = _getStatusColor(status);
     final statusIcon = _getStatusIcon(status);
 
@@ -416,8 +417,14 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
   }
 
   void _showAmbulanceDetails(dynamic ambulance) {
-    final status = ambulance['status'] as String;
+    final status = (ambulance['status'] ?? 'available').toString();
     final statusColor = _getStatusColor(status);
+    final ambId = (ambulance['name'] ?? ambulance['id'] ?? 'Ambulance').toString();
+    final paramedicName = (ambulance['paramedic_name'] ?? ambulance['driver'] ?? 'Unassigned').toString();
+    final vehicleType = (ambulance['type'] ?? 'ALS').toString();
+    final mileage = ambulance['mileage'] != null ? '${ambulance['mileage']} km' : 'N/A';
+    final fuelLevel = ambulance['fuel_level'] != null ? '${ambulance['fuel_level']}%' : '100%';
+    final lastService = (ambulance['last_service'] ?? 'OK').toString();
 
     showModalBottomSheet(
       context: context,
@@ -464,7 +471,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              ambulance['id'],
+                              ambId,
                               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
                             ),
                             const SizedBox(height: 4),
@@ -486,14 +493,15 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
                   ),
                   const SizedBox(height: 24),
                   _buildDetailSection('Vehicle Information', [
-                    {'label': 'Type', 'value': ambulance['type']},
-                    {'label': 'Mileage', 'value': '${ambulance['mileage']} km'},
-                    {'label': 'Fuel Level', 'value': '${ambulance['fuel_level']}%'},
-                    {'label': 'Last Service', 'value': ambulance['last_service'] ?? 'Unknown'},
+                    {'label': 'Type', 'value': vehicleType},
+                    {'label': 'Mileage', 'value': mileage},
+                    {'label': 'Fuel Level', 'value': fuelLevel},
+                    {'label': 'Last Service', 'value': lastService},
                   ]),
                   const SizedBox(height: 20),
-                  _buildDetailSection('Current Assignment', [
-                    {'label': 'Driver', 'value': ambulance['driver']},
+                  _buildDetailSection('Current Assignment & Contact', [
+                    {'label': 'Paramedic', 'value': paramedicName},
+                    {'label': 'Phone / Line', 'value': ambulance['phone']?.toString() ?? AppConfig.emergencyCallLine},
                     {'label': 'Status', 'value': status.replaceAll('_', ' ').toUpperCase()},
                     {'label': 'Location', 'value': ambulance['current_location'] != null ? 'GPS Active' : 'N/A'},
                   ]),
@@ -554,7 +562,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
     );
   }
 
-  Widget _buildDetailSection(String title, List<Map<String, String>> items) {
+  Widget _buildDetailSection(String title, List<Map<String, String?>> items) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -575,8 +583,8 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(item['label']!, style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6))),
-                  Text(item['value']!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text(item['label'] ?? '', style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6))),
+                  Text(item['value'] ?? 'N/A', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
                 ],
               ),
             )).toList(),

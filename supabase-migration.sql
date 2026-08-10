@@ -37,6 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 CREATE TABLE IF NOT EXISTS ambulances (
   id            TEXT        PRIMARY KEY DEFAULT uuid_generate_v4()::TEXT,
   name          TEXT        NOT NULL,
+  phone         TEXT        NOT NULL DEFAULT '09164880144',
   status        TEXT        NOT NULL DEFAULT 'available'
                   CHECK (status IN ('available', 'on_mission', 'maintenance', 'offline')),
   location      GEOGRAPHY(POINT, 4326),          -- PostGIS point (lng, lat)

@@ -1,8 +1,8 @@
 # SEADS API Contract (Flutter client ↔ seads-backend)
 
 Base URL: `AppConfig.backendUrl`  
-Default (Android emulator): `http://10.0.2.2:3000`  
-Production: `https://<your-service>.onrender.com`
+Default (Local machine / Linux / Desktop / Web): `http://localhost:3000`  
+Android emulator: `http://10.0.2.2:3000`  
 
 All protected routes require: `Authorization: Bearer <Firebase ID token>`
 

@@ -15,7 +15,16 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  FirebaseMessaging? _messaging;
+  FirebaseMessaging? get messaging {
+    try {
+      _messaging ??= FirebaseMessaging.instance;
+      return _messaging;
+    } catch (_) {
+      return null;
+    }
+  }
+
   final ApiService _apiService = ApiService();
 
   final _foregroundController = StreamController<RemoteMessage>.broadcast();
@@ -26,47 +35,53 @@ class NotificationService {
 
   /// Call once at app startup after Firebase.initializeApp()
   Future<void> initialize() async {
-    // Register background handler
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    final msg = messaging;
+    if (msg == null) return;
+    try {
+      // Register background handler
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-    // Request permissions
-    final settings = await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-    debugPrint('[FCM] Auth status: ${settings.authorizationStatus}');
+      // Request permissions
+      final settings = await msg.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      debugPrint('[FCM] Auth status: ${settings.authorizationStatus}');
 
-    // Save initial token to backend
-    await _saveTokenToBackend();
+      // Save initial token to backend
+      await _saveTokenToBackend();
 
-    // Re-save token on refresh
-    _messaging.onTokenRefresh.listen((token) {
-      debugPrint('[FCM] Token refreshed');
-      _apiService.saveFcmToken(token);
-    });
+      // Re-save token on refresh
+      msg.onTokenRefresh.listen((token) {
+        debugPrint('[FCM] Token refreshed');
+        _apiService.saveFcmToken(token);
+      });
 
-    // Foreground messages
-    FirebaseMessaging.onMessage.listen((message) {
-      debugPrint('[FCM Foreground] ${message.notification?.title}');
-      _foregroundController.add(message);
-    });
+      // Foreground messages
+      FirebaseMessaging.onMessage.listen((message) {
+        debugPrint('[FCM Foreground] ${message.notification?.title}');
+        _foregroundController.add(message);
+      });
 
-    // Background notification tapped
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      _tapController.add(message.data);
-    });
+      // Background notification tapped
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        _tapController.add(message.data);
+      });
 
-    // Terminated state — app opened via notification
-    final initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) {
-      _tapController.add(initialMessage.data);
+      // Terminated state — app opened via notification
+      final initialMessage = await msg.getInitialMessage();
+      if (initialMessage != null) {
+        _tapController.add(initialMessage.data);
+      }
+    } catch (e) {
+      debugPrint('[FCM] FCM Initialization bypassed: $e');
     }
   }
 
   Future<void> _saveTokenToBackend() async {
     try {
-      final token = await _messaging.getToken();
+      final token = await messaging?.getToken();
       if (token != null) {
         debugPrint('[FCM] Saving token to backend');
         await _apiService.saveFcmToken(token);

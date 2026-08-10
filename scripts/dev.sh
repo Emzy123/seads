@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SEADS — Local development launcher
 # Starts the backend with nodemon.
-# In a separate terminal, run: flutter run --dart-define=BACKEND_URL=http://10.0.2.2:3000
+# For local machine testing (Linux / Web / Desktop): flutter run
+# For Android emulator: flutter run --dart-define=BACKEND_URL=http://10.0.2.2:3000
 
 set -e
 

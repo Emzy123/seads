@@ -2,17 +2,18 @@
 ///
 /// Examples:
 /// ```bash
+/// flutter run
 /// flutter run --dart-define=DEMO_MODE=true
-/// flutter run --dart-define=BACKEND_URL=http://127.0.0.1:3000 --dart-define=ENV=staging
+/// flutter run --dart-define=BACKEND_URL=http://10.0.2.2:3000
 /// ```
 class AppConfig {
   /// API base URL.
-  /// Local Android emulator: `--dart-define=BACKEND_URL=http://10.0.2.2:3000`
-  /// Local physical device:  `--dart-define=BACKEND_URL=http://<your-lan-ip>:3000`
-  /// Production (Render):    `--dart-define=BACKEND_URL=https://<your-service>.onrender.com`
+  /// Local machine (Linux/Desktop/Web): `http://localhost:3000` (default)
+  /// Local Android emulator:            `--dart-define=BACKEND_URL=http://10.0.2.2:3000`
+  /// Local physical device:             `--dart-define=BACKEND_URL=http://<your-lan-ip>:3000`
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'http://10.0.2.2:3000',
+    defaultValue: 'http://localhost:3000',
   );
 
   /// `dev` | `staging` | `prod` — informational / future feature flags.
@@ -34,6 +35,9 @@ class AppConfig {
 
   /// Use for UI fallbacks: never show fabricated data in production builds.
   static bool get allowDemoFallbacks => isDemoMode;
+
+  /// Central emergency call line number across dashboards.
+  static const String emergencyCallLine = '09164880144';
 
   /// Realtime poll bounds (informational; see [RealtimeSyncService]).
   static const int realtimePollMinSeconds = 2;

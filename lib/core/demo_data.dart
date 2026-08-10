@@ -57,33 +57,60 @@ class DemoData {
 
   static List<dynamic> mockAmbulances() => [
         {
+          'id': 'AMB-0916',
+          'name': 'SEADS-0916 (Emergency Line)',
+          'status': 'available',
+          'current_location': 'POINT(-73.98 40.74)',
+          'paramedic': 'Emergency Paramedic Duty',
+          'phone': AppConfig.emergencyCallLine,
+        },
+        {
           'id': 'AMB-201',
           'status': 'responding',
           'current_location': 'POINT(-73.99 40.72)',
           'paramedic': 'John Smith',
+          'phone': '+2348030000001',
         },
         {
           'id': 'AMB-204',
           'status': 'available',
           'current_location': 'POINT(-74.01 40.70)',
           'paramedic': 'Emily Wilson',
+          'phone': '+2348030000002',
         },
       ];
 
   static List<dynamic> mockFleet() => [
         {
+          'id': 'AMB-0916',
+          'name': 'SEADS-0916 (Emergency Call Line)',
+          'status': 'available',
+          'type': 'ALS Emergency Unit',
+          'paramedic': 'Emergency Paramedic Duty',
+          'phone': AppConfig.emergencyCallLine,
+          'last_maintenance': '2024-02-10',
+          'fuel_level': 100,
+          'mileage': '2,400 km',
+        },
+        {
           'id': 'AMB-201',
           'status': 'responding',
           'type': 'ALS',
           'paramedic': 'John Smith',
+          'phone': '+2348030000001',
           'last_maintenance': '2024-01-15',
+          'fuel_level': 85,
+          'mileage': '12,500 km',
         },
         {
           'id': 'AMB-204',
           'status': 'available',
           'type': 'BLS',
           'paramedic': 'Emily Wilson',
+          'phone': '+2348030000002',
           'last_maintenance': '2024-02-01',
+          'fuel_level': 90,
+          'mileage': '8,200 km',
         },
       ];
 

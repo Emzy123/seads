@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,14 +27,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _loadProfile() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    final uid = _auth.currentUid;
+    if (uid == null) {
       if (mounted) setState(() => _loading = false);
       return;
     }
-    setState(() => _email = user.email);
+    setState(() => _email = _auth.currentEmail);
     try {
-      final profile = await _auth.getUserProfile(user.uid);
+      final profile = await _auth.getUserProfile(uid);
       if (mounted) {
         setState(() {
           _role = profile.role;

@@ -81,7 +81,7 @@ class ApiService {
   }
 
   Future<String> _requireToken() async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken() ?? AuthTokenCache.token;
     if (token == null) throw ApiException.notSignedIn();
     AuthTokenCache.save(token);
     return token;

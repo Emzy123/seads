@@ -9,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../config.dart';
@@ -276,8 +277,34 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
         ),
         centerTitle: true,
         actions: [
+          // Emergency Call Line Hotline Button
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              backgroundColor: AppTheme.criticalRed.withOpacity(0.2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            ),
+            icon: const Icon(Icons.phone, color: AppTheme.criticalRed, size: 16),
+            label: Text(
+              AppConfig.emergencyCallLine,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+            ),
+            onPressed: () async {
+              AppTheme.hapticMedium();
+              final uri = Uri.parse('tel:${AppConfig.emergencyCallLine}');
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              } else if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Calling Emergency Call Line: ${AppConfig.emergencyCallLine}')),
+                );
+              }
+            },
+          ),
+          const SizedBox(width: 4),
           // Communication toggle
           IconButton(
+            tooltip: '',
             icon: Badge(
               isLabelVisible: _chatMessages.isNotEmpty,
               smallSize: 8,
@@ -286,6 +313,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
             onPressed: () => setState(() => _showChatPanel = !_showChatPanel),
           ),
           IconButton(
+            tooltip: '',
             icon: const Icon(Icons.refresh, color: Colors.white70),
             onPressed: () {
               AppTheme.hapticLight();
@@ -339,11 +367,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
                     if (isWideScreen || isMedium)
                       Expanded(
                         flex: 1,
-                        child: Column(
-                          children: [
-                            _buildWideSidePanel(),
-                          ],
-                        ),
+                        child: _buildWideSidePanel(),
                       ),
                   ],
                 ),
@@ -413,7 +437,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
 
   Widget _buildQuickStats() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, _unassignedCritical > 0 ? 16 : 100, 16, 16),
       child: Row(
         children: [
           Expanded(child: _buildStatCard('Active', _activeIncidents.toString(), Icons.emergency, AppTheme.criticalRed)),
@@ -790,6 +814,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
                 Text('Team Chat', style: AppTheme.headingSmall.copyWith(fontSize: 18)),
                 const Spacer(),
                 IconButton(
+                  tooltip: '',
                   icon: const Icon(Icons.close, color: Colors.white54),
                   onPressed: () => setState(() => _showChatPanel = false),
                 ),
@@ -875,6 +900,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
+                  tooltip: '',
                   icon: const Icon(Icons.send, color: AppTheme.accentOrange),
                   onPressed: _sendBroadcastMessage,
                 ),

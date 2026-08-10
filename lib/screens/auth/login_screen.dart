@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
           content: const Text(
             'Please contact our support team to reset your password.\n\n'
             'Email: support@seads.com\n'
-            'Phone: +234-800-SEADS',
+            'Emergency Line: 09164880144',
             style: TextStyle(color: Colors.white70),
           ),
           actions: [

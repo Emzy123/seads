@@ -27,7 +27,8 @@ import 'services/auth_service.dart';
 final GoRouter appRouter = GoRouter(
   initialLocation: '/welcome',
   redirect: (BuildContext context, GoRouterState state) async {
-    final user = FirebaseAuth.instance.currentUser;
+    final authService = AuthService();
+    final isAuthenticated = authService.isAuthenticated;
 
     // Pages that require the user to be logged OUT
     final isOnAuthPage = state.matchedLocation.startsWith('/welcome') ||
@@ -41,12 +42,12 @@ final GoRouter appRouter = GoRouter(
     final isOnOnboarding = state.matchedLocation.startsWith('/onboarding-complete');
 
     // If user is not logged in, redirect to welcome (except auth pages)
-    if (user == null && !isOnAuthPage && !isOnOnboarding) {
+    if (!isAuthenticated && !isOnAuthPage && !isOnOnboarding) {
       return '/welcome';
     }
 
     // If user is logged in and on a pure-auth page (not onboarding), send home
-    if (user != null && isOnAuthPage) {
+    if (isAuthenticated && isOnAuthPage) {
       return '/home';
     }
 
@@ -167,10 +168,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<String?> _getUserRole() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
     final authService = AuthService();
-    final profile = await authService.getUserProfile(user.uid);
+    final uid = authService.currentUid;
+    if (uid == null) return null;
+    final profile = await authService.getUserProfile(uid);
     return profile.role;
   }
 

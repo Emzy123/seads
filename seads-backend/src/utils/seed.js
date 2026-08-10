@@ -14,11 +14,12 @@ require('dotenv').config({ path: require('path').join(__dirname, '../../.env') }
 const db = require('../config/db');
 
 const AMBULANCES = [
-  { id: 'amb-001', name: 'SEADS-01', lat:  51.5074, lng: -0.1278, status: 'available' },  // London
-  { id: 'amb-002', name: 'SEADS-02', lat:  51.5155, lng: -0.0922, status: 'available' },
-  { id: 'amb-003', name: 'SEADS-03', lat:  51.4994, lng: -0.1772, status: 'available' },
-  { id: 'amb-004', name: 'SEADS-04', lat:  51.5225, lng: -0.1358, status: 'maintenance' },
-  { id: 'amb-005', name: 'SEADS-05', lat:  51.4879, lng: -0.1060, status: 'offline' },
+  { id: 'amb-0916', name: 'SEADS-0916 (Emergency 09164880144)', lat: 51.5090, lng: -0.1180, status: 'available', phone: '09164880144' },
+  { id: 'amb-001', name: 'SEADS-01', lat:  51.5074, lng: -0.1278, status: 'available', phone: '09164880144' },  // London
+  { id: 'amb-002', name: 'SEADS-02', lat:  51.5155, lng: -0.0922, status: 'available', phone: '09164880144' },
+  { id: 'amb-003', name: 'SEADS-03', lat:  51.4994, lng: -0.1772, status: 'available', phone: '09164880144' },
+  { id: 'amb-004', name: 'SEADS-04', lat:  51.5225, lng: -0.1358, status: 'maintenance', phone: '09164880144' },
+  { id: 'amb-005', name: 'SEADS-05', lat:  51.4879, lng: -0.1060, status: 'offline', phone: '09164880144' },
 ];
 
 const EQUIPMENT_TEMPLATES = [
@@ -44,10 +45,10 @@ async function seed() {
     // ── Ambulances ──────────────────────────────────────────
     for (const amb of AMBULANCES) {
       await db.query(
-        `INSERT INTO ambulances (id, name, status, location)
-         VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::GEOGRAPHY)
-         ON CONFLICT (id) DO NOTHING`,
-        [amb.id, amb.name, amb.status, amb.lng, amb.lat]
+        `INSERT INTO ambulances (id, name, status, phone, location)
+         VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326)::GEOGRAPHY)
+         ON CONFLICT (id) DO UPDATE SET phone = EXCLUDED.phone, name = EXCLUDED.name`,
+        [amb.id, amb.name, amb.status, amb.phone, amb.lng, amb.lat]
       );
 
       // ── Equipment per ambulance ─────────────────────────

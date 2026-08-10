@@ -381,8 +381,10 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
   }
 
   void _showStaffDetails(dynamic staff) {
-    final status = staff['status'] as String;
+    final status = (staff['status'] ?? 'on_duty').toString();
     final statusColor = _getStatusColor(status);
+    final staffName = (staff['name'] ?? 'Staff Member').toString();
+    final staffRole = (staff['role'] ?? 'paramedic').toString();
 
     showModalBottomSheet(
       context: context,
@@ -420,7 +422,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                           radius: 50,
                           backgroundColor: statusColor.withOpacity(0.2),
                           child: Icon(
-                            staff['role'] == 'paramedic' ? Icons.local_shipping : Icons.headset,
+                            staffRole == 'paramedic' ? Icons.local_shipping : Icons.headset,
                             color: statusColor,
                             size: 50,
                           ),
@@ -444,7 +446,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                   const SizedBox(height: 24),
                   Center(
                     child: Text(
-                      staff['name'],
+                      staffName,
                       style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
@@ -457,23 +459,23 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${staff['role'].toString().toUpperCase()} • ${status.toUpperCase().replaceAll('_', ' ')}',
+                        '${staffRole.toUpperCase()} • ${status.toUpperCase().replaceAll('_', ' ')}',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: statusColor),
                       ),
                     ),
                   ),
                   const SizedBox(height: 32),
                   _buildDetailSection('Contact Information', [
-                    {'icon': Icons.email, 'label': 'Email', 'value': staff['email']},
-                    {'icon': Icons.phone, 'label': 'Phone', 'value': staff['phone']},
+                    {'icon': Icons.email, 'label': 'Email', 'value': (staff['email'] ?? 'N/A').toString()},
+                    {'icon': Icons.phone, 'label': 'Phone', 'value': (staff['phone'] ?? 'N/A').toString()},
                   ]),
                   const SizedBox(height: 20),
                   _buildDetailSection('Work Information', [
-                    {'icon': Icons.schedule, 'label': 'Shift', 'value': staff['shift']},
-                    {'icon': Icons.calendar_today, 'label': 'Joined', 'value': staff['join_date']},
-                    {'icon': Icons.star, 'label': 'Rating', 'value': '⭐ ${staff['rating']}'},
-                    if (staff['role'] == 'paramedic')
-                      {'icon': Icons.assignment, 'label': 'Total Incidents', 'value': staff['incidents'].toString()},
+                    {'icon': Icons.schedule, 'label': 'Shift', 'value': (staff['shift'] ?? 'Day Shift').toString()},
+                    {'icon': Icons.calendar_today, 'label': 'Joined', 'value': (staff['join_date'] ?? 'N/A').toString()},
+                    {'icon': Icons.star, 'label': 'Rating', 'value': '⭐ ${staff['rating'] ?? "4.8"}'},
+                    if (staffRole == 'paramedic')
+                      {'icon': Icons.assignment, 'label': 'Total Incidents', 'value': (staff['incidents'] ?? 0).toString()},
                   ]),
                   const SizedBox(height: 24),
                   Row(
@@ -538,12 +540,12 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                   Icon(item['icon'] as IconData, size: 20, color: Colors.white.withOpacity(0.5)),
                   const SizedBox(width: 12),
                   Text(
-                    '${item['label']}: ',
+                    '${item['label'] ?? ""}: ',
                     style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6)),
                   ),
                   Expanded(
                     child: Text(
-                      item['value'] as String,
+                      item['value']?.toString() ?? 'N/A',
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),

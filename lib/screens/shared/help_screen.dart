@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../config.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/seads_scaffold.dart';
 
 class HelpScreen extends StatelessWidget {
   const HelpScreen({super.key});
 
-  static const _supportPhone = '+23480073237';
+  static const _supportPhone = AppConfig.emergencyCallLine;
   static const _supportEmail = 'support@seads.app';
 
   Future<void> _launch(Uri uri) async {
@@ -25,10 +26,11 @@ class HelpScreen extends StatelessWidget {
       body: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              Text('Emergency', style: AppTheme.headingSmall),
+              Text('Emergency Hotline', style: AppTheme.headingSmall),
               const SizedBox(height: 8),
               Text(
-                'For life-threatening emergencies, call your local emergency number (e.g. 911) immediately. SEADS supplements — it does not replace — official emergency services.',
+                'Emergency Dispatch Call Line: $_supportPhone\n'
+                'For immediate emergency assistance, tap below to dial our direct call line.',
                 style: AppTheme.bodyMedium,
               ),
               const SizedBox(height: 24),
@@ -47,12 +49,12 @@ class HelpScreen extends StatelessWidget {
                 'Use "Forgot password" on the login screen, or contact support below.',
               ),
               const SizedBox(height: 24),
-              Text('Contact support', style: AppTheme.headingSmall),
+              Text('Contact support & Dispatch', style: AppTheme.headingSmall),
               const SizedBox(height: 12),
               _actionTile(
                 context,
                 icon: Icons.phone,
-                label: 'Call SEADS support',
+                label: 'Call Emergency Line ($_supportPhone)',
                 onTap: () => _launch(Uri.parse('tel:$_supportPhone')),
               ),
               _actionTile(

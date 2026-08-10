@@ -278,6 +278,30 @@ class _ParamedicHomeScreenState extends ConsumerState<ParamedicHomeScreen>
         ),
         centerTitle: true,
         actions: [
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              backgroundColor: AppTheme.criticalRed.withOpacity(0.2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            ),
+            icon: const Icon(Icons.phone, color: AppTheme.criticalRed, size: 16),
+            label: Text(
+              AppConfig.emergencyCallLine,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+            ),
+            onPressed: () async {
+              AppTheme.hapticMedium();
+              final uri = Uri.parse('tel:${AppConfig.emergencyCallLine}');
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              } else if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Calling Emergency Call Line: ${AppConfig.emergencyCallLine}')),
+                );
+              }
+            },
+          ),
+          const SizedBox(width: 4),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Center(

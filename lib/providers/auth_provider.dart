@@ -10,9 +10,9 @@ final authStateProvider = StreamProvider((ref) {
 
 final userProfileProvider = FutureProvider<app_model.User?>((ref) async {
   final authService = ref.watch(authServiceProvider);
-  final user = authService.currentUser;
+  final uid = authService.currentUid;
   
-  if (user == null) return null;
+  if (uid == null) return null;
   
-  return await authService.getUserProfile(user.uid);
+  return await authService.getUserProfile(uid);
 });
